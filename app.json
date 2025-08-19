@@ -41,7 +41,7 @@
           "origin": "https://modernclock.app"
         }
       ],
-      "expo-font", 
+      "expo-font",
       "expo-web-browser",
       [
         "expo-notifications",
@@ -59,6 +59,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": "https://modernclock.app"
+      },
+      "eas": {
+        "projectId": "84486f05-2828-4d29-b08d-f7808c3f2eeb"
+      }
+    },
+    "owner": "arnaud93500"
   }
 }
