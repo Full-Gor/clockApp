@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,13 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Play, Volume2 } from 'lucide-react-native';
-import { soundManager, ALARM_SOUNDS } from '@/services/soundService';
+import * as DocumentPicker from 'expo-document-picker';
+import { Play, Volume2, Plus, Trash2 } from 'lucide-react-native';
+import { soundManager, SoundOption } from '@/services/soundService';
 
 interface AlarmPickerProps {
   alarm?: {
@@ -50,6 +52,17 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
   const [selectedSound, setSelectedSound] = useState(alarm?.sound || 'classic');
   const [playingSound, setPlayingSound] = useState<string | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [availableSounds, setAvailableSounds] = useState<SoundOption[]>([]);
+
+  // Charger les sons disponibles au montage du composant
+  useEffect(() => {
+    loadSounds();
+  }, []);
+
+  const loadSounds = async () => {
+    const sounds = await soundManager.getAllSounds();
+    setAvailableSounds(sounds);
+  };
 
   const weekDays = [
     'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'
@@ -109,14 +122,58 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
     }
 
     setPlayingSound(soundId);
-    
+
     try {
       await soundManager.previewSound(soundId);
     } catch (error) {
       console.error('Erreur lors de la lecture du son:', error);
     }
-    
-    setTimeout(() => setPlayingSound(null), 1000);
+
+    setTimeout(() => setPlayingSound(null), 3000);
+  };
+
+  const addCustomSound = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'audio/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      const fileName = file.name.replace(/\.[^/.]+$/, ''); // Retirer l'extension
+
+      await soundManager.addCustomSound(fileName, file.uri);
+      await loadSounds();
+
+      Alert.alert('Succès', `Le son "${fileName}" a été ajouté !`);
+    } catch (error) {
+      console.error('Erreur lors de l\'ajout du son:', error);
+      Alert.alert('Erreur', 'Impossible d\'ajouter ce fichier audio');
+    }
+  };
+
+  const deleteCustomSound = async (soundId: string, soundName: string) => {
+    Alert.alert(
+      'Supprimer le son',
+      `Voulez-vous vraiment supprimer "${soundName}" ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            await soundManager.removeCustomSound(soundId);
+            await loadSounds();
+            // Si c'était le son sélectionné, choisir le son par défaut
+            if (selectedSound === soundId) {
+              setSelectedSound('classic');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -228,8 +285,18 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
 
         {/* Sound Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Son d'alarme</Text>
-          {ALARM_SOUNDS.map((sound) => (
+          <View style={styles.soundHeader}>
+            <Text style={styles.sectionTitle}>Son d'alarme</Text>
+            <TouchableOpacity
+              style={styles.addSoundButton}
+              onPress={addCustomSound}
+            >
+              <Plus size={18} color="#fff" />
+              <Text style={styles.addSoundText}>Ajouter MP3</Text>
+            </TouchableOpacity>
+          </View>
+
+          {availableSounds.map((sound) => (
             <View key={sound.id} style={styles.soundItem}>
               <TouchableOpacity
                 style={[
@@ -244,25 +311,37 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
                     selectedSound === sound.id && styles.soundNameSelected
                   ]}>
                     {sound.name}
+                    {sound.isCustom && ' ⭐'}
                   </Text>
                   <Text style={styles.soundDescription}>{sound.description}</Text>
                 </View>
-                
+
                 {selectedSound === sound.id && (
                   <View style={styles.selectedIndicator} />
                 )}
               </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.playButton}
-                onPress={() => playSound(sound.id)}
-              >
-                {playingSound === sound.id ? (
-                  <Volume2 size={20} color="#8b5cf6" />
-                ) : (
-                  <Play size={20} color="#9ca3af" />
+
+              <View style={styles.soundActions}>
+                <TouchableOpacity
+                  style={styles.playButton}
+                  onPress={() => playSound(sound.id)}
+                >
+                  {playingSound === sound.id ? (
+                    <Volume2 size={20} color="#8b5cf6" />
+                  ) : (
+                    <Play size={20} color="#9ca3af" />
+                  )}
+                </TouchableOpacity>
+
+                {sound.isCustom && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => deleteCustomSound(sound.id, sound.name)}
+                  >
+                    <Trash2 size={18} color="#ef4444" />
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
+              </View>
             </View>
           ))}
         </View>
@@ -386,10 +465,35 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
   },
+  soundHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  addSoundButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#8b5cf6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  addSoundText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   soundItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  soundActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   soundOption: {
     flex: 1,
@@ -434,6 +538,14 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -1,16 +1,20 @@
-import { Audio } from 'expo-av';
+import { Audio, AVPlaybackSource } from 'expo-av';
 import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface SoundOption {
   id: string;
   name: string;
   description: string;
-  frequency?: number;
-  pattern?: number[];
+  fileUri?: string; // URI vers le fichier MP3 (local ou personnalisé)
+  isCustom?: boolean;
+  frequency?: number; // Fallback pour sons synthétiques
+  pattern?: number[]; // Fallback pour sons synthétiques
 }
 
-export const ALARM_SOUNDS: SoundOption[] = [
+// Sons par défaut - ils peuvent utiliser des fichiers ou des sons synthétiques
+export const DEFAULT_ALARM_SOUNDS: SoundOption[] = [
   {
     id: 'classic',
     name: 'Classique',
@@ -48,9 +52,12 @@ export const ALARM_SOUNDS: SoundOption[] = [
   },
 ];
 
+export let ALARM_SOUNDS: SoundOption[] = [...DEFAULT_ALARM_SOUNDS];
+
 class SoundManager {
   private sounds: Map<string, Audio.Sound> = new Map();
   private isInitialized = false;
+  private customSoundsLoaded = false;
 
   async initialize() {
     if (this.isInitialized) return;
@@ -64,9 +71,69 @@ class SoundManager {
         playThroughEarpieceAndroid: false,
       });
       this.isInitialized = true;
+
+      // Charger les sons personnalisés sauvegardés
+      await this.loadCustomSounds();
     } catch (error) {
       console.error('Erreur lors de l\'initialisation audio:', error);
     }
+  }
+
+  // Charger les sons personnalisés depuis AsyncStorage
+  async loadCustomSounds() {
+    try {
+      const customSoundsJson = await AsyncStorage.getItem('customAlarmSounds');
+      if (customSoundsJson) {
+        const customSounds: SoundOption[] = JSON.parse(customSoundsJson);
+        ALARM_SOUNDS = [...DEFAULT_ALARM_SOUNDS, ...customSounds];
+        this.customSoundsLoaded = true;
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des sons personnalisés:', error);
+    }
+  }
+
+  // Ajouter un son personnalisé
+  async addCustomSound(name: string, fileUri: string): Promise<SoundOption> {
+    const customSound: SoundOption = {
+      id: `custom_${Date.now()}`,
+      name: name,
+      description: 'Son personnalisé',
+      fileUri: fileUri,
+      isCustom: true,
+    };
+
+    // Ajouter à la liste
+    ALARM_SOUNDS.push(customSound);
+
+    // Sauvegarder dans AsyncStorage
+    await this.saveCustomSounds();
+
+    return customSound;
+  }
+
+  // Supprimer un son personnalisé
+  async removeCustomSound(soundId: string) {
+    ALARM_SOUNDS = ALARM_SOUNDS.filter(s => s.id !== soundId);
+    await this.saveCustomSounds();
+  }
+
+  // Sauvegarder les sons personnalisés
+  private async saveCustomSounds() {
+    try {
+      const customSounds = ALARM_SOUNDS.filter(s => s.isCustom);
+      await AsyncStorage.setItem('customAlarmSounds', JSON.stringify(customSounds));
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde des sons personnalisés:', error);
+    }
+  }
+
+  // Obtenir tous les sons disponibles
+  async getAllSounds(): Promise<SoundOption[]> {
+    if (!this.customSoundsLoaded) {
+      await this.loadCustomSounds();
+    }
+    return ALARM_SOUNDS;
   }
 
   async createBeepSound(frequency: number = 800, duration: number = 500): Promise<Audio.Sound | null> {
@@ -143,7 +210,7 @@ class SoundManager {
 
   async playAlarmSound(soundId: string): Promise<void> {
     await this.initialize();
-    
+
     const soundOption = ALARM_SOUNDS.find(s => s.id === soundId);
     if (!soundOption) return;
 
@@ -153,12 +220,15 @@ class SoundManager {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
 
-      // Créer et jouer le son avec un pattern
-      if (soundOption.pattern) {
+      // Si le son a un fichier MP3, l'utiliser
+      if (soundOption.fileUri) {
+        await this.playAudioFile(soundOption.fileUri, true);
+      } else if (soundOption.pattern) {
+        // Fallback : Créer et jouer le son synthétique avec un pattern
         for (let i = 0; i < soundOption.pattern.length; i += 2) {
           const delay = soundOption.pattern[i];
           const duration = soundOption.pattern[i + 1] || 500;
-          
+
           setTimeout(async () => {
             const sound = await this.createBeepSound(soundOption.frequency || 800, duration);
             if (sound) {
@@ -174,7 +244,7 @@ class SoundManager {
           }, delay);
         }
       } else {
-        // Son simple
+        // Son synthétique simple
         const sound = await this.createBeepSound(soundOption.frequency || 800, 1000);
         if (sound) {
           await sound.playAsync();
@@ -196,33 +266,72 @@ class SoundManager {
     }
   }
 
+  // Jouer un fichier audio MP3
+  private async playAudioFile(fileUri: string, loop: boolean = false): Promise<void> {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: fileUri },
+        {
+          shouldPlay: true,
+          isLooping: loop,
+          volume: 1.0,
+        }
+      );
+
+      // Stocker le son pour pouvoir l'arrêter plus tard
+      this.sounds.set('current_alarm', sound);
+
+      // Si ce n'est pas en boucle, nettoyer après 30 secondes
+      if (!loop) {
+        setTimeout(async () => {
+          try {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+            this.sounds.delete('current_alarm');
+          } catch (error) {
+            console.error('Erreur lors du nettoyage du son:', error);
+          }
+        }, 30000);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la lecture du fichier audio:', error);
+      throw error;
+    }
+  }
+
   async previewSound(soundId: string): Promise<void> {
+    await this.initialize();
+
     const soundOption = ALARM_SOUNDS.find(s => s.id === soundId);
     if (!soundOption) return;
 
     try {
       if (Platform.OS !== 'web') {
-        // Utiliser le pattern de vibration pour la preview
-        if (soundOption.pattern) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
 
-      // Jouer un court extrait du son avec pattern
-      if (soundOption.pattern && soundOption.pattern.length >= 2) {
-        const sound = await this.createBeepSound(soundOption.frequency || 800, 300);
-        if (sound) {
-          await sound.playAsync();
-          setTimeout(async () => {
-            try {
-              await sound.unloadAsync();
-            } catch (error) {
-              console.error('Erreur lors du nettoyage du son preview:', error);
-            }
-          }, 500);
-        }
+      // Si le son a un fichier MP3, l'utiliser pour la preview
+      if (soundOption.fileUri) {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: soundOption.fileUri },
+          {
+            shouldPlay: true,
+            isLooping: false,
+            volume: 1.0,
+          }
+        );
+
+        // Arrêter après 3 secondes
+        setTimeout(async () => {
+          try {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+          } catch (error) {
+            console.error('Erreur lors du nettoyage du son preview:', error);
+          }
+        }, 3000);
       } else {
-        // Son simple
+        // Fallback : Jouer un court extrait du son synthétique
         const sound = await this.createBeepSound(soundOption.frequency || 800, 300);
         if (sound) {
           await sound.playAsync();
