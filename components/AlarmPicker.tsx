@@ -44,11 +44,12 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
     }
     return new Date();
   });
-  
+
   const [label, setLabel] = useState(alarm?.label || 'Réveil');
   const [selectedDays, setSelectedDays] = useState<string[]>(alarm?.days || []);
   const [selectedSound, setSelectedSound] = useState(alarm?.sound || 'classic');
   const [playingSound, setPlayingSound] = useState<string | null>(null);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
   const weekDays = [
     'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'
@@ -137,19 +138,29 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
         {/* Time Picker */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Heure</Text>
-          <View style={styles.timePickerContainer}>
+          <TouchableOpacity
+            style={styles.timePickerContainer}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Text style={styles.timeDisplay}>
+              {selectedTime.getHours().toString().padStart(2, '0')}:{selectedTime.getMinutes().toString().padStart(2, '0')}
+            </Text>
+            <Text style={styles.timePickerHint}>Appuyez pour modifier</Text>
+          </TouchableOpacity>
+
+          {showTimePicker && (
             <DateTimePicker
               value={selectedTime}
               mode="time"
               is24Hour={true}
               display="default"
               onChange={(event, date) => {
+                setShowTimePicker(false);
                 if (date) setSelectedTime(date);
               }}
               textColor="#fff"
-              style={styles.timePicker}
             />
-          </View>
+          )}
         </View>
 
         {/* Label Input */}
@@ -302,12 +313,21 @@ const styles = StyleSheet.create({
   timePickerContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,
-    padding: 20,
+    padding: 30,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
   },
-  timePicker: {
-    width: 200,
-    height: 120,
+  timeDisplay: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 2,
+  },
+  timePickerHint: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 8,
   },
   labelInput: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
