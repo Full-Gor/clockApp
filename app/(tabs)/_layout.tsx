@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Clock, AlarmClock as Alarm, Timer, Watch as Stopwatch } from 'lucide-react-native';
+import { Clock, AlarmClock as Alarm, Timer, Watch as Stopwatch, Dumbbell } from 'lucide-react-native';
 import { View, StyleSheet } from 'react-native';
 
 export default function TabLayout() {
@@ -46,6 +46,15 @@ export default function TabLayout() {
           title: 'Minuteur',
           tabBarIcon: ({ size, color }) => (
             <Timer size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="rounds"
+        options={{
+          title: 'Rounds',
+          tabBarIcon: ({ size, color }) => (
+            <Dumbbell size={size} color={color} />
           ),
         }}
       />
