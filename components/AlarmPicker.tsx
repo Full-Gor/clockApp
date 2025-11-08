@@ -8,11 +8,12 @@ import {
   ScrollView,
   Alert,
   Keyboard,
+  Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
-import { Play, Volume2, Plus, Trash2, Keyboard as KeyboardIcon, Clock } from 'lucide-react-native';
+import { Play, Volume2, Plus, Trash2, Keyboard as KeyboardIcon, Clock, Volume, Sun, MessageSquare } from 'lucide-react-native';
 import { soundManager, SoundOption } from '@/services/soundService';
 
 interface AlarmPickerProps {
@@ -22,6 +23,14 @@ interface AlarmPickerProps {
     days: string[];
     sound: string;
     enabled: boolean;
+    useFadeIn?: boolean;
+    fadeInDuration?: number;
+    voiceMessage?: string;
+    useVoiceNotification?: boolean;
+    voiceLoop?: boolean;
+    voiceLoopInterval?: number;
+    brightnessLevel?: number;
+    useBrightnessControl?: boolean;
   } | null;
   onSave: (alarm: {
     time: string;
@@ -29,6 +38,14 @@ interface AlarmPickerProps {
     days: string[];
     sound: string;
     enabled: boolean;
+    useFadeIn: boolean;
+    fadeInDuration: number;
+    voiceMessage: string;
+    useVoiceNotification: boolean;
+    voiceLoop: boolean;
+    voiceLoopInterval: number;
+    brightnessLevel: number;
+    useBrightnessControl: boolean;
   }) => void;
   onCancel: () => void;
 }
@@ -58,6 +75,16 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
   const [hoursInput, setHoursInput] = useState(selectedTime.getHours().toString().padStart(2, '0'));
   const [minutesInput, setMinutesInput] = useState(selectedTime.getMinutes().toString().padStart(2, '0'));
 
+  // Advanced features state
+  const [useFadeIn, setUseFadeIn] = useState(alarm?.useFadeIn ?? false);
+  const [fadeInDuration, setFadeInDuration] = useState(alarm?.fadeInDuration ?? 5);
+  const [voiceMessage, setVoiceMessage] = useState(alarm?.voiceMessage || '');
+  const [useVoiceNotification, setUseVoiceNotification] = useState(alarm?.useVoiceNotification ?? false);
+  const [voiceLoop, setVoiceLoop] = useState(alarm?.voiceLoop ?? false);
+  const [voiceLoopInterval, setVoiceLoopInterval] = useState(alarm?.voiceLoopInterval ?? 10);
+  const [brightnessLevel, setBrightnessLevel] = useState(alarm?.brightnessLevel ?? 1.0);
+  const [useBrightnessControl, setUseBrightnessControl] = useState(alarm?.useBrightnessControl ?? false);
+
   // Charger les sons disponibles au montage du composant
   useEffect(() => {
     loadSounds();
@@ -82,23 +109,25 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
 
   const handleSave = () => {
     const timeString = `${selectedTime.getHours().toString().padStart(2, '0')}:${selectedTime.getMinutes().toString().padStart(2, '0')}`;
-    
-    console.log('Saving alarm with data:', {
-      time: timeString,
-      label: label.trim() || 'Réveil',
-      days: selectedDays,
-      sound: selectedSound,
-      enabled: true,
-    });
-    
+
     const alarmData = {
       time: timeString,
       label: label.trim() || 'Réveil',
       days: selectedDays,
       sound: selectedSound,
       enabled: true,
+      useFadeIn,
+      fadeInDuration,
+      voiceMessage: voiceMessage.trim(),
+      useVoiceNotification,
+      voiceLoop,
+      voiceLoopInterval,
+      brightnessLevel,
+      useBrightnessControl,
     };
-    
+
+    console.log('Saving alarm with advanced features:', alarmData);
+
     onSave(alarmData);
   };
 
@@ -449,6 +478,182 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
             </View>
           ))}
         </View>
+
+        {/* Advanced Features Section */}
+        <View style={styles.advancedSection}>
+          <Text style={styles.advancedTitle}>Options Avancées</Text>
+
+          {/* Fade-in Sound */}
+          <View style={styles.advancedOption}>
+            <View style={styles.optionHeader}>
+              <View style={styles.optionTitleRow}>
+                <Volume size={20} color="#8b5cf6" />
+                <Text style={styles.optionTitle}>Son progressif (Fade-in)</Text>
+              </View>
+              <Switch
+                value={useFadeIn}
+                onValueChange={setUseFadeIn}
+                trackColor={{ false: '#374151', true: '#8b5cf6' }}
+                thumbColor={useFadeIn ? '#a78bfa' : '#9ca3af'}
+              />
+            </View>
+            {useFadeIn && (
+              <View style={styles.optionDetails}>
+                <Text style={styles.optionLabel}>
+                  Durée du fade-in: {fadeInDuration} secondes
+                </Text>
+                <View style={styles.sliderContainer}>
+                  <TouchableOpacity
+                    style={styles.sliderButton}
+                    onPress={() => setFadeInDuration(Math.max(1, fadeInDuration - 1))}
+                  >
+                    <Text style={styles.sliderButtonText}>-</Text>
+                  </TouchableOpacity>
+                  <View style={styles.sliderTrack}>
+                    <View
+                      style={[
+                        styles.sliderFill,
+                        { width: `${(fadeInDuration / 30) * 100}%` }
+                      ]}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={styles.sliderButton}
+                    onPress={() => setFadeInDuration(Math.min(30, fadeInDuration + 1))}
+                  >
+                    <Text style={styles.sliderButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.optionDescription}>
+                  Le volume augmentera progressivement de 0% à 100%
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Brightness Control */}
+          <View style={styles.advancedOption}>
+            <View style={styles.optionHeader}>
+              <View style={styles.optionTitleRow}>
+                <Sun size={20} color="#f59e0b" />
+                <Text style={styles.optionTitle}>Contrôle de luminosité</Text>
+              </View>
+              <Switch
+                value={useBrightnessControl}
+                onValueChange={setUseBrightnessControl}
+                trackColor={{ false: '#374151', true: '#f59e0b' }}
+                thumbColor={useBrightnessControl ? '#fbbf24' : '#9ca3af'}
+              />
+            </View>
+            {useBrightnessControl && (
+              <View style={styles.optionDetails}>
+                <Text style={styles.optionLabel}>
+                  Luminosité: {Math.round(brightnessLevel * 100)}%
+                </Text>
+                <View style={styles.sliderContainer}>
+                  <TouchableOpacity
+                    style={styles.sliderButton}
+                    onPress={() => setBrightnessLevel(Math.max(0, brightnessLevel - 0.1))}
+                  >
+                    <Text style={styles.sliderButtonText}>-</Text>
+                  </TouchableOpacity>
+                  <View style={styles.sliderTrack}>
+                    <View
+                      style={[
+                        styles.sliderFillBrightness,
+                        { width: `${brightnessLevel * 100}%` }
+                      ]}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={styles.sliderButton}
+                    onPress={() => setBrightnessLevel(Math.min(1, brightnessLevel + 0.1))}
+                  >
+                    <Text style={styles.sliderButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.optionDescription}>
+                  L'écran passera progressivement à cette luminosité
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Voice Notification */}
+          <View style={styles.advancedOption}>
+            <View style={styles.optionHeader}>
+              <View style={styles.optionTitleRow}>
+                <MessageSquare size={20} color="#10b981" />
+                <Text style={styles.optionTitle}>Notification vocale</Text>
+              </View>
+              <Switch
+                value={useVoiceNotification}
+                onValueChange={setUseVoiceNotification}
+                trackColor={{ false: '#374151', true: '#10b981' }}
+                thumbColor={useVoiceNotification ? '#34d399' : '#9ca3af'}
+              />
+            </View>
+            {useVoiceNotification && (
+              <View style={styles.optionDetails}>
+                <Text style={styles.optionLabel}>Message à lire</Text>
+                <TextInput
+                  style={styles.voiceMessageInput}
+                  value={voiceMessage}
+                  onChangeText={setVoiceMessage}
+                  placeholder="Ex: Bonjour, il est l'heure de se réveiller !"
+                  placeholderTextColor="#6b7280"
+                  multiline
+                  numberOfLines={2}
+                  maxLength={200}
+                />
+
+                <View style={styles.voiceLoopContainer}>
+                  <Text style={styles.optionLabel}>Répéter en boucle</Text>
+                  <Switch
+                    value={voiceLoop}
+                    onValueChange={setVoiceLoop}
+                    trackColor={{ false: '#374151', true: '#10b981' }}
+                    thumbColor={voiceLoop ? '#34d399' : '#9ca3af'}
+                  />
+                </View>
+
+                {voiceLoop && (
+                  <>
+                    <Text style={styles.optionLabel}>
+                      Intervalle: {voiceLoopInterval} secondes
+                    </Text>
+                    <View style={styles.sliderContainer}>
+                      <TouchableOpacity
+                        style={styles.sliderButton}
+                        onPress={() => setVoiceLoopInterval(Math.max(3, voiceLoopInterval - 1))}
+                      >
+                        <Text style={styles.sliderButtonText}>-</Text>
+                      </TouchableOpacity>
+                      <View style={styles.sliderTrack}>
+                        <View
+                          style={[
+                            styles.sliderFillVoice,
+                            { width: `${((voiceLoopInterval - 3) / 57) * 100}%` }
+                          ]}
+                        />
+                      </View>
+                      <TouchableOpacity
+                        style={styles.sliderButton}
+                        onPress={() => setVoiceLoopInterval(Math.min(60, voiceLoopInterval + 1))}
+                      >
+                        <Text style={styles.sliderButtonText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+
+                <Text style={styles.optionDescription}>
+                  Le message sera lu à voix haute par synthèse vocale
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
       </ScrollView>
     </LinearGradient>
   );
@@ -709,5 +914,119 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Advanced Features Styles
+  advancedSection: {
+    paddingHorizontal: 20,
+    marginBottom: 30,
+  },
+  advancedTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 16,
+  },
+  advancedOption: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  optionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  optionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  optionDetails: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  optionLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#d1d5db',
+    marginBottom: 8,
+  },
+  optionDescription: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  sliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 8,
+  },
+  sliderButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#8b5cf6',
+  },
+  sliderButtonText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#8b5cf6',
+  },
+  sliderTrack: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  sliderFill: {
+    height: '100%',
+    backgroundColor: '#8b5cf6',
+    borderRadius: 4,
+  },
+  sliderFillBrightness: {
+    height: '100%',
+    backgroundColor: '#f59e0b',
+    borderRadius: 4,
+  },
+  sliderFillVoice: {
+    height: '100%',
+    backgroundColor: '#10b981',
+    borderRadius: 4,
+  },
+  voiceMessageInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#fff',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  voiceLoopContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 8,
   },
 });

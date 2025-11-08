@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { soundManager } from './soundService';
+import { brightnessManager } from './brightnessService';
+import { ttsManager } from './ttsService';
 
 // Configuration des notifications
 Notifications.setNotificationHandler({
@@ -12,13 +14,47 @@ Notifications.setNotificationHandler({
 });
 
 // Écouter les notifications reçues
-Notifications.addNotificationReceivedListener(notification => {
+Notifications.addNotificationReceivedListener(async notification => {
   console.log('Notification reçue:', notification);
-  
-  // Jouer le son d'alarme personnalisé si c'est une alarme
+
+  // Déclencher l'alarme avec toutes les fonctionnalités avancées
   if (notification.request.content.categoryIdentifier === 'alarm') {
-    const soundId = notification.request.content.data?.sound || 'classic';
-    soundManager.playAlarmSound(soundId);
+    const data = notification.request.content.data || {};
+    const soundId = data.sound || 'classic';
+    const useFadeIn = data.useFadeIn || false;
+    const fadeInDuration = data.fadeInDuration || 5;
+    const useBrightnessControl = data.useBrightnessControl || false;
+    const brightnessLevel = data.brightnessLevel || 1.0;
+    const useVoiceNotification = data.useVoiceNotification || false;
+    const voiceMessage = data.voiceMessage || '';
+    const voiceLoop = data.voiceLoop || false;
+    const voiceLoopInterval = data.voiceLoopInterval || 10;
+
+    try {
+      // 1. Contrôle de la luminosité
+      if (useBrightnessControl) {
+        await brightnessManager.initialize();
+        await brightnessManager.setBrightnessFade(brightnessLevel, 2000);
+      }
+
+      // 2. Jouer le son avec ou sans fade-in
+      if (useFadeIn) {
+        await soundManager.playAlarmWithFadeIn(soundId, fadeInDuration * 1000);
+      } else {
+        await soundManager.playAlarmSound(soundId);
+      }
+
+      // 3. Notification vocale
+      if (useVoiceNotification && voiceMessage) {
+        if (voiceLoop) {
+          await ttsManager.speakLoop(voiceMessage, voiceLoopInterval * 1000);
+        } else {
+          await ttsManager.speak(voiceMessage);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors du déclenchement de l\'alarme:', error);
+    }
   }
 });
 export const initializeNotifications = async () => {
@@ -46,6 +82,14 @@ interface AlarmData {
   label: string;
   days: string[];
   sound: string;
+  useFadeIn?: boolean;
+  fadeInDuration?: number;
+  voiceMessage?: string;
+  useVoiceNotification?: boolean;
+  voiceLoop?: boolean;
+  voiceLoopInterval?: number;
+  brightnessLevel?: number;
+  useBrightnessControl?: boolean;
 }
 
 export const scheduleAlarmNotification = async (alarm: AlarmData) => {
@@ -77,6 +121,14 @@ export const scheduleAlarmNotification = async (alarm: AlarmData) => {
           data: {
             sound: alarm.sound,
             alarmId: alarm.id,
+            useFadeIn: alarm.useFadeIn,
+            fadeInDuration: alarm.fadeInDuration,
+            voiceMessage: alarm.voiceMessage,
+            useVoiceNotification: alarm.useVoiceNotification,
+            voiceLoop: alarm.voiceLoop,
+            voiceLoopInterval: alarm.voiceLoopInterval,
+            brightnessLevel: alarm.brightnessLevel,
+            useBrightnessControl: alarm.useBrightnessControl,
           },
         },
         trigger: {
@@ -102,6 +154,14 @@ export const scheduleAlarmNotification = async (alarm: AlarmData) => {
               data: {
                 sound: alarm.sound,
                 alarmId: alarm.id,
+                useFadeIn: alarm.useFadeIn,
+                fadeInDuration: alarm.fadeInDuration,
+                voiceMessage: alarm.voiceMessage,
+                useVoiceNotification: alarm.useVoiceNotification,
+                voiceLoop: alarm.voiceLoop,
+                voiceLoopInterval: alarm.voiceLoopInterval,
+                brightnessLevel: alarm.brightnessLevel,
+                useBrightnessControl: alarm.useBrightnessControl,
               },
             },
             trigger: {
@@ -145,5 +205,23 @@ export const getAllScheduledNotifications = async () => {
   } catch (error) {
     console.error('Erreur lors de la récupération des notifications:', error);
     return [];
+  }
+};
+
+// Fonction pour arrêter complètement une alarme en cours
+export const stopCurrentAlarm = async () => {
+  try {
+    // Arrêter le son
+    await soundManager.stopCurrentAlarm();
+
+    // Arrêter la synthèse vocale
+    await ttsManager.stop();
+
+    // Restaurer la luminosité originale
+    await brightnessManager.restoreOriginalBrightness();
+
+    console.log('Alarme arrêtée complètement');
+  } catch (error) {
+    console.error('Erreur lors de l\'arrêt de l\'alarme:', error);
   }
 };

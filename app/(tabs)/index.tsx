@@ -23,6 +23,14 @@ interface Alarm {
   label: string;
   sound: string;
   enabled: boolean;
+  useFadeIn?: boolean;
+  fadeInDuration?: number;
+  voiceMessage?: string;
+  useVoiceNotification?: boolean;
+  voiceLoop?: boolean;
+  voiceLoopInterval?: number;
+  brightnessLevel?: number;
+  useBrightnessControl?: boolean;
 }
 
 export default function AlarmsScreen() {
