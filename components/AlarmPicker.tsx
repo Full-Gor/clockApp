@@ -7,11 +7,12 @@ import {
   TextInput,
   ScrollView,
   Alert,
+  Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
-import { Play, Volume2, Plus, Trash2 } from 'lucide-react-native';
+import { Play, Volume2, Plus, Trash2, Keyboard as KeyboardIcon, Clock } from 'lucide-react-native';
 import { soundManager, SoundOption } from '@/services/soundService';
 
 interface AlarmPickerProps {
@@ -53,6 +54,9 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
   const [playingSound, setPlayingSound] = useState<string | null>(null);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [availableSounds, setAvailableSounds] = useState<SoundOption[]>([]);
+  const [useKeyboardInput, setUseKeyboardInput] = useState(false);
+  const [hoursInput, setHoursInput] = useState(selectedTime.getHours().toString().padStart(2, '0'));
+  const [minutesInput, setMinutesInput] = useState(selectedTime.getMinutes().toString().padStart(2, '0'));
 
   // Charger les sons disponibles au montage du composant
   useEffect(() => {
@@ -176,6 +180,51 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
     );
   };
 
+  const handleHoursChange = (text: string) => {
+    // Permettre seulement les chiffres et limiter à 2 caractères
+    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 2);
+    setHoursInput(cleaned);
+
+    if (cleaned.length === 2) {
+      const hours = parseInt(cleaned);
+      if (hours >= 0 && hours <= 23) {
+        const newTime = new Date(selectedTime);
+        newTime.setHours(hours);
+        setSelectedTime(newTime);
+      }
+    }
+  };
+
+  const handleMinutesChange = (text: string) => {
+    // Permettre seulement les chiffres et limiter à 2 caractères
+    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 2);
+    setMinutesInput(cleaned);
+
+    if (cleaned.length === 2) {
+      const minutes = parseInt(cleaned);
+      if (minutes >= 0 && minutes <= 59) {
+        const newTime = new Date(selectedTime);
+        newTime.setMinutes(minutes);
+        setSelectedTime(newTime);
+      }
+    }
+  };
+
+  const toggleInputMode = () => {
+    if (useKeyboardInput) {
+      // Valider et formater les inputs avant de changer de mode
+      const hours = Math.min(Math.max(parseInt(hoursInput) || 0, 0), 23);
+      const minutes = Math.min(Math.max(parseInt(minutesInput) || 0, 0), 59);
+      const newTime = new Date(selectedTime);
+      newTime.setHours(hours, minutes);
+      setSelectedTime(newTime);
+      setHoursInput(hours.toString().padStart(2, '0'));
+      setMinutesInput(minutes.toString().padStart(2, '0'));
+      Keyboard.dismiss();
+    }
+    setUseKeyboardInput(!useKeyboardInput);
+  };
+
   return (
     <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -194,29 +243,84 @@ export const AlarmPicker: React.FC<AlarmPickerProps> = ({
 
         {/* Time Picker */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Heure</Text>
-          <TouchableOpacity
-            style={styles.timePickerContainer}
-            onPress={() => setShowTimePicker(true)}
-          >
-            <Text style={styles.timeDisplay}>
-              {selectedTime.getHours().toString().padStart(2, '0')}:{selectedTime.getMinutes().toString().padStart(2, '0')}
-            </Text>
-            <Text style={styles.timePickerHint}>Appuyez pour modifier</Text>
-          </TouchableOpacity>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Heure</Text>
+            <TouchableOpacity
+              style={styles.inputModeButton}
+              onPress={toggleInputMode}
+            >
+              {useKeyboardInput ? (
+                <Clock size={18} color="#8b5cf6" />
+              ) : (
+                <KeyboardIcon size={18} color="#8b5cf6" />
+              )}
+              <Text style={styles.inputModeButtonText}>
+                {useKeyboardInput ? 'Sélecteur' : 'Clavier'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-          {showTimePicker && (
-            <DateTimePicker
-              value={selectedTime}
-              mode="time"
-              is24Hour={true}
-              display="default"
-              onChange={(event, date) => {
-                setShowTimePicker(false);
-                if (date) setSelectedTime(date);
-              }}
-              textColor="#fff"
-            />
+          {useKeyboardInput ? (
+            // Mode saisie numérique
+            <View style={styles.keyboardInputContainer}>
+              <View style={styles.timeInputRow}>
+                <TextInput
+                  style={styles.timeInput}
+                  value={hoursInput}
+                  onChangeText={handleHoursChange}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  placeholder="00"
+                  placeholderTextColor="#6b7280"
+                  selectTextOnFocus
+                />
+                <Text style={styles.timeSeparator}>:</Text>
+                <TextInput
+                  style={styles.timeInput}
+                  value={minutesInput}
+                  onChangeText={handleMinutesChange}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  placeholder="00"
+                  placeholderTextColor="#6b7280"
+                  selectTextOnFocus
+                />
+              </View>
+              <Text style={styles.timeInputHint}>
+                Format 24h • Heures: 00-23 • Minutes: 00-59
+              </Text>
+            </View>
+          ) : (
+            // Mode sélecteur natif
+            <>
+              <TouchableOpacity
+                style={styles.timePickerContainer}
+                onPress={() => setShowTimePicker(true)}
+              >
+                <Text style={styles.timeDisplay}>
+                  {selectedTime.getHours().toString().padStart(2, '0')}:{selectedTime.getMinutes().toString().padStart(2, '0')}
+                </Text>
+                <Text style={styles.timePickerHint}>Appuyez pour modifier</Text>
+              </TouchableOpacity>
+
+              {showTimePicker && (
+                <DateTimePicker
+                  value={selectedTime}
+                  mode="time"
+                  is24Hour={true}
+                  display="default"
+                  onChange={(event, date) => {
+                    setShowTimePicker(false);
+                    if (date) {
+                      setSelectedTime(date);
+                      setHoursInput(date.getHours().toString().padStart(2, '0'));
+                      setMinutesInput(date.getMinutes().toString().padStart(2, '0'));
+                    }
+                  }}
+                  textColor="#fff"
+                />
+              )}
+            </>
           )}
         </View>
 
@@ -383,11 +487,68 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 30,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
-    marginBottom: 16,
+  },
+  inputModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    borderWidth: 1,
+    borderColor: '#8b5cf6',
+  },
+  inputModeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8b5cf6',
+  },
+  keyboardInputContainer: {
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+    alignItems: 'center',
+  },
+  timeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  timeInput: {
+    width: 80,
+    height: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    borderWidth: 2,
+    borderColor: '#8b5cf6',
+  },
+  timeSeparator: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#8b5cf6',
+  },
+  timeInputHint: {
+    fontSize: 12,
+    color: '#9ca3af',
+    textAlign: 'center',
   },
   timePickerContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
