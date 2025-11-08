@@ -25,6 +25,7 @@ export default function TimerScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [soundsRefreshKey, setSoundsRefreshKey] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const endTimeRef = useRef<number>(0);
 
   // Charger les sons personnalisés au montage du composant
   useEffect(() => {
@@ -49,16 +50,22 @@ export default function TimerScreen() {
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
+      endTimeRef.current = Date.now() + (timeLeft * 1000);
+
       intervalRef.current = setInterval(() => {
-        setTimeLeft(prevTime => {
-          if (prevTime <= 1) {
-            setIsRunning(false);
-            handleTimerComplete();
-            return 0;
+        const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
+
+        if (remaining <= 0) {
+          setTimeLeft(0);
+          setIsRunning(false);
+          handleTimerComplete();
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
           }
-          return prevTime - 1;
-        });
-      }, 1000);
+        } else {
+          setTimeLeft(remaining);
+        }
+      }, 100);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -70,7 +77,7 @@ export default function TimerScreen() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, timeLeft]);
+  }, [isRunning]);
 
   const handleTimerComplete = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

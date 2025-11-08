@@ -1,13 +1,20 @@
 import { Tabs } from 'expo-router';
 import { Clock, AlarmClock as Alarm, Timer, Watch as Stopwatch, Dumbbell } from 'lucide-react-native';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: {
+          ...styles.tabBar,
+          height: 60 + insets.bottom,
+          paddingBottom: Platform.OS === 'android' ? 8 : insets.bottom,
+        },
         tabBarActiveTintColor: '#8b5cf6',
         tabBarInactiveTintColor: '#6b7280',
         tabBarShowLabel: true,
@@ -68,13 +75,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     elevation: 0,
     shadowOpacity: 0,
-    height: 85,
-    paddingBottom: 10,
-    paddingTop: 10,
+    paddingTop: 8,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    marginTop: 4,
+    marginTop: 2,
+    marginBottom: 2,
   },
 });

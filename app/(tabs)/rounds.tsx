@@ -33,27 +33,31 @@ export default function RoundsScreen() {
   const [hasPlayedWarning, setHasPlayedWarning] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const endTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
+      endTimeRef.current = Date.now() + (timeLeft * 1000);
+
       intervalRef.current = setInterval(() => {
-        setTimeLeft(prevTime => {
-          const newTime = prevTime - 1;
+        const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
 
-          // Alerte avant la fin du round
-          if (newTime === warningTime && (phase === 'round' || phase === 'rest') && !hasPlayedWarning) {
-            playSound('warning');
-            setHasPlayedWarning(true);
+        // Alerte avant la fin du round
+        if (remaining === warningTime && (phase === 'round' || phase === 'rest') && !hasPlayedWarning) {
+          playSound('warning');
+          setHasPlayedWarning(true);
+        }
+
+        if (remaining <= 0) {
+          setTimeLeft(0);
+          handlePhaseComplete();
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
           }
-
-          if (newTime <= 0) {
-            handlePhaseComplete();
-            return 0;
-          }
-
-          return newTime;
-        });
-      }, 1000);
+        } else {
+          setTimeLeft(remaining);
+        }
+      }, 100);
     } else {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -65,7 +69,7 @@ export default function RoundsScreen() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, timeLeft, phase, hasPlayedWarning]);
+  }, [isRunning, phase]);
 
   const handlePhaseComplete = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

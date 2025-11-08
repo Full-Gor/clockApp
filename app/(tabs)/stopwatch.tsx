@@ -22,15 +22,21 @@ export default function StopwatchScreen() {
   const [isRunning, setIsRunning] = useState(false);
   const [laps, setLaps] = useState<Lap[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const accumulatedTimeRef = useRef<number>(0);
   const pulseAnimation = useRef(new Animated.Value(1)).current;
   const scaleAnimation = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (isRunning) {
+      startTimeRef.current = Date.now() - accumulatedTimeRef.current;
+
       intervalRef.current = setInterval(() => {
-        setTime(prevTime => prevTime + 10);
+        const elapsed = Date.now() - startTimeRef.current;
+        setTime(elapsed);
+        accumulatedTimeRef.current = elapsed;
       }, 10);
-      
+
       // Animation de pulsation pour l'indicateur
       Animated.loop(
         Animated.sequence([
@@ -93,6 +99,8 @@ export default function StopwatchScreen() {
     setTime(0);
     setIsRunning(false);
     setLaps([]);
+    accumulatedTimeRef.current = 0;
+    startTimeRef.current = 0;
   };
 
   const handleLap = () => {
