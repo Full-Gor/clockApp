@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
 import { soundManager, ALARM_SOUNDS } from '@/services/soundService';
 import { TimerPicker } from '@/components/TimerPicker';
+import { CustomAlert } from '@/components/CustomAlert';
 
 export default function TimerScreen() {
   const [initialTime, setInitialTime] = useState(60); // en secondes
@@ -24,6 +25,7 @@ export default function TimerScreen() {
   const [selectedSound, setSelectedSound] = useState('classic');
   const [isMuted, setIsMuted] = useState(false);
   const [soundsRefreshKey, setSoundsRefreshKey] = useState(0);
+  const [showCompletionAlert, setShowCompletionAlert] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const endTimeRef = useRef<number>(0);
 
@@ -81,7 +83,7 @@ export default function TimerScreen() {
 
   const handleTimerComplete = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
+
     if (!isMuted) {
       // Jouer le son d'alarme
       try {
@@ -96,16 +98,13 @@ export default function TimerScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
 
-    Alert.alert(
-      '⏰ Temps écoulé !',
-      'Votre minuteur est terminé.',
-      [
-        {
-          text: 'OK',
-          onPress: () => {}
-        }
-      ]
-    );
+    // Afficher l'alerte personnalisée
+    setShowCompletionAlert(true);
+  };
+
+  const handleStopAlarm = async () => {
+    await soundManager.stopCurrentAlarm();
+    setShowCompletionAlert(false);
   };
 
   const formatTime = (seconds: number) => {
@@ -381,6 +380,17 @@ export default function TimerScreen() {
           </ScrollView>
         </LinearGradient>
       </Modal>
+
+      {/* Alerte de fin de minuteur */}
+      <CustomAlert
+        visible={showCompletionAlert}
+        title="Temps écoulé !"
+        message="Votre minuteur est terminé."
+        icon="timer"
+        showStopButton={!isMuted}
+        onStop={handleStopAlarm}
+        onDismiss={() => setShowCompletionAlert(false)}
+      />
     </LinearGradient>
   );
 }

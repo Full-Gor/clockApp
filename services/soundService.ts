@@ -58,6 +58,8 @@ class SoundManager {
   private sounds: Map<string, Audio.Sound> = new Map();
   private isInitialized = false;
   private customSoundsLoaded = false;
+  private fadeInterval: NodeJS.Timeout | null = null;
+  private currentAlarmSound: Audio.Sound | null = null;
 
   async initialize() {
     if (this.isInitialized) return;
@@ -349,7 +351,100 @@ class SoundManager {
     }
   }
 
+  // Jouer une alarme avec volume progressif
+  async playAlarmWithFadeIn(soundId: string, fadeDuration: number = 5000): Promise<void> {
+    await this.initialize();
+
+    const soundOption = ALARM_SOUNDS.find(s => s.id === soundId);
+    if (!soundOption) return;
+
+    try {
+      if (soundOption.fileUri) {
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: soundOption.fileUri },
+          {
+            shouldPlay: true,
+            isLooping: true,
+            volume: 0, // Commencer à volume 0
+          }
+        );
+
+        this.currentAlarmSound = sound;
+        this.sounds.set('current_alarm', sound);
+
+        // Augmenter progressivement le volume
+        const steps = 50;
+        const stepDuration = fadeDuration / steps;
+        let currentStep = 0;
+
+        this.fadeInterval = setInterval(async () => {
+          currentStep++;
+          const volume = currentStep / steps;
+
+          try {
+            await sound.setVolumeAsync(Math.min(volume, 1));
+          } catch (error) {
+            console.error('Erreur lors du réglage du volume:', error);
+          }
+
+          if (currentStep >= steps) {
+            if (this.fadeInterval) {
+              clearInterval(this.fadeInterval);
+              this.fadeInterval = null;
+            }
+          }
+        }, stepDuration);
+      } else {
+        // Fallback sans fade-in
+        await this.playAlarmSound(soundId);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la lecture du son avec fade-in:', error);
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }
+    }
+  }
+
+  // Arrêter le son en cours
+  async stopCurrentAlarm(): Promise<void> {
+    try {
+      // Arrêter le fade-in en cours
+      if (this.fadeInterval) {
+        clearInterval(this.fadeInterval);
+        this.fadeInterval = null;
+      }
+
+      // Arrêter le son actuel
+      if (this.currentAlarmSound) {
+        await this.currentAlarmSound.stopAsync();
+        await this.currentAlarmSound.unloadAsync();
+        this.currentAlarmSound = null;
+      }
+
+      // Nettoyer les sons stockés
+      const alarmSound = this.sounds.get('current_alarm');
+      if (alarmSound) {
+        try {
+          await alarmSound.stopAsync();
+          await alarmSound.unloadAsync();
+        } catch (error) {
+          // Ignorer les erreurs de nettoyage
+        }
+        this.sounds.delete('current_alarm');
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'arrêt du son:', error);
+    }
+  }
+
   async cleanup(): Promise<void> {
+    await this.stopCurrentAlarm();
+
     for (const [id, sound] of this.sounds) {
       try {
         await sound.unloadAsync();

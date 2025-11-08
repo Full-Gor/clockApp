@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, RotateCcw, Settings, SkipForward, Volume2, VolumeX } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { soundManager } from '@/services/soundService';
+import { CustomAlert } from '@/components/CustomAlert';
 
 type Phase = 'prepare' | 'round' | 'rest' | 'finished';
 
@@ -31,6 +32,7 @@ export default function RoundsScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [hasPlayedWarning, setHasPlayedWarning] = useState(false);
+  const [showCompletionAlert, setShowCompletionAlert] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const endTimeRef = useRef<number>(0);
@@ -119,11 +121,13 @@ export default function RoundsScreen() {
   };
 
   const showCompletionMessage = () => {
-    Alert.alert(
-      '🥊 Entraînement terminé !',
-      `Vous avez complété ${rounds} round${rounds > 1 ? 's' : ''} !`,
-      [{ text: 'OK', onPress: handleReset }]
-    );
+    setShowCompletionAlert(true);
+  };
+
+  const handleStopAlarm = async () => {
+    await soundManager.stopCurrentAlarm();
+    setShowCompletionAlert(false);
+    handleReset();
   };
 
   const handleStartPause = () => {
@@ -448,6 +452,20 @@ export default function RoundsScreen() {
           </ScrollView>
         </LinearGradient>
       </Modal>
+
+      {/* Alerte de fin d'entraînement */}
+      <CustomAlert
+        visible={showCompletionAlert}
+        title="Entraînement terminé !"
+        message={`Vous avez complété ${rounds} round${rounds > 1 ? 's' : ''} !`}
+        icon="round"
+        showStopButton={!isMuted}
+        onStop={handleStopAlarm}
+        onDismiss={() => {
+          setShowCompletionAlert(false);
+          handleReset();
+        }}
+      />
     </LinearGradient>
   );
 }
