@@ -12,11 +12,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, RotateCcw, Settings, Volume2, VolumeX, Bell, Upload } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { soundManager, ALARM_SOUNDS } from '@/services/soundService';
 import { TimerPicker } from '@/components/TimerPicker';
 import { CustomAlert } from '@/components/CustomAlert';
 
 export default function TimerScreen() {
+  const insets = useSafeAreaInsets();
   const [initialTime, setInitialTime] = useState(60); // en secondes
   const [timeLeft, setTimeLeft] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
@@ -341,7 +343,11 @@ export default function TimerScreen() {
             <Text style={styles.addSoundButtonText}>Ajouter un fichier MP3</Text>
           </TouchableOpacity>
 
-          <ScrollView style={styles.soundsList}>
+          <ScrollView
+            style={styles.soundsList}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+            showsVerticalScrollIndicator={false}
+          >
             {ALARM_SOUNDS.map((sound) => (
               <View key={sound.id} style={styles.soundItem}>
                 <TouchableOpacity
