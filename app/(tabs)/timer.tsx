@@ -9,8 +9,9 @@ import {
   Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Play, Pause, RotateCcw, Settings, Volume2, VolumeX, Bell } from 'lucide-react-native';
+import { Play, Pause, RotateCcw, Settings, Volume2, VolumeX, Bell, Upload } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import * as DocumentPicker from 'expo-document-picker';
 import { soundManager, ALARM_SOUNDS } from '@/services/soundService';
 import { TimerPicker } from '@/components/TimerPicker';
 
@@ -22,7 +23,29 @@ export default function TimerScreen() {
   const [showSoundPicker, setShowSoundPicker] = useState(false);
   const [selectedSound, setSelectedSound] = useState('classic');
   const [isMuted, setIsMuted] = useState(false);
+  const [soundsRefreshKey, setSoundsRefreshKey] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Charger les sons personnalisés au montage du composant
+  useEffect(() => {
+    const loadCustomSounds = async () => {
+      await soundManager.initialize();
+      await soundManager.loadCustomSounds();
+      setSoundsRefreshKey(prev => prev + 1);
+    };
+    loadCustomSounds();
+  }, []);
+
+  // Rafraîchir la liste des sons quand la modal s'ouvre
+  useEffect(() => {
+    if (showSoundPicker) {
+      const refreshSounds = async () => {
+        await soundManager.loadCustomSounds();
+        setSoundsRefreshKey(prev => prev + 1);
+      };
+      refreshSounds();
+    }
+  }, [showSoundPicker]);
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
@@ -142,6 +165,33 @@ export default function TimerScreen() {
     return sound ? sound.name : 'Classique';
   };
 
+  const handleAddCustomSound = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'audio/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const file = result.assets[0];
+      const defaultName = file.name.replace(/\.[^/.]+$/, ''); // Nom du fichier sans extension
+
+      try {
+        const customSound = await soundManager.addCustomSound(defaultName, file.uri);
+        setSelectedSound(customSound.id);
+        setSoundsRefreshKey(prev => prev + 1); // Rafraîchir la liste
+        Alert.alert('Succès', `Le son "${defaultName}" a été ajouté avec succès !`);
+      } catch (error) {
+        console.error('Erreur lors de l\'ajout du son:', error);
+        Alert.alert('Erreur', 'Impossible d\'ajouter le son personnalisé.');
+      }
+    } catch (error) {
+      console.error('Erreur lors de la sélection du fichier:', error);
+      Alert.alert('Erreur', 'Impossible de sélectionner le fichier audio.');
+    }
+  };
+
   return (
     <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -162,11 +212,11 @@ export default function TimerScreen() {
             <TouchableOpacity
               style={styles.headerButton}
               onPress={() => {
-                setSelectedSound(selectedSound === 'default' ? 'vibration' : 'default');
+                setShowSoundPicker(true);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }}
             >
-              <Settings size={20} color="#8b5cf6" />
+              <Bell size={20} color="#8b5cf6" />
             </TouchableOpacity>
           </View>
         </View>
@@ -174,11 +224,11 @@ export default function TimerScreen() {
         {/* Cercle de progression */}
         <View style={styles.circleContainer}>
           <View style={styles.progressCircle}>
-            <View style={[styles.progressBar, { 
-              transform: [{ rotate: `${getProgress() * 360}deg` }] 
+            <View style={[styles.progressBar, {
+              transform: [{ rotate: `${getProgress() * 360}deg` }]
             }]} />
             <View style={styles.innerCircle}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.timeDisplay}
                 onPress={() => !isRunning && setShowTimePicker(true)}
               >
@@ -190,54 +240,6 @@ export default function TimerScreen() {
             </View>
           </View>
         </View>
-
-        {/* Temps prédéfinis */}
-        {!isRunning && (
-          <View style={styles.presetsContainer}>
-            <Text style={styles.presetsTitle}>Durées rapides</Text>
-            <View style={styles.presetsGrid}>
-              {presetTimes.map((preset, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.presetButton,
-                    initialTime === preset.seconds && styles.presetButtonActive
-                  ]}
-                  onPress={() => handlePresetTime(preset.seconds)}
-                >
-                  <Text style={[
-                    styles.presetButtonText,
-                    initialTime === preset.seconds && styles.presetButtonTextActive
-                  ]}>
-                    {preset.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Sélection du son d'alarme */}
-        {!isRunning && (
-          <View style={styles.soundContainer}>
-            <Text style={styles.soundTitle}>Son d'alarme</Text>
-            <View style={styles.soundSelector}>
-              <TouchableOpacity
-                style={styles.soundButton}
-                onPress={() => setShowSoundPicker(true)}
-              >
-                <Bell size={20} color="#8b5cf6" />
-                <Text style={styles.soundButtonText}>{getCurrentSoundName()}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.previewButton}
-                onPress={() => previewSound(selectedSound)}
-              >
-                <Volume2 size={20} color="#9ca3af" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Boutons de contrôle */}
         <View style={styles.controlsContainer}>
@@ -269,6 +271,32 @@ export default function TimerScreen() {
             <Settings size={24} color={isRunning ? '#6b7280' : '#8b5cf6'} />
           </TouchableOpacity>
         </View>
+
+        {/* Temps prédéfinis */}
+        {!isRunning && (
+          <View style={styles.presetsContainer}>
+            <Text style={styles.presetsTitle}>Durées rapides</Text>
+            <View style={styles.presetsGrid}>
+              {presetTimes.map((preset, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.presetButton,
+                    initialTime === preset.seconds && styles.presetButtonActive
+                  ]}
+                  onPress={() => handlePresetTime(preset.seconds)}
+                >
+                  <Text style={[
+                    styles.presetButtonText,
+                    initialTime === preset.seconds && styles.presetButtonTextActive
+                  ]}>
+                    {preset.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       {/* Modal de sélection du temps */}
@@ -300,6 +328,12 @@ export default function TimerScreen() {
             <Text style={styles.modalTitle}>Sons d'alarme</Text>
             <View style={{ width: 60 }} />
           </View>
+
+          {/* Bouton pour ajouter un son personnalisé */}
+          <TouchableOpacity style={styles.addSoundButton} onPress={handleAddCustomSound}>
+            <Upload size={20} color="#8b5cf6" />
+            <Text style={styles.addSoundButtonText}>Ajouter un fichier MP3</Text>
+          </TouchableOpacity>
 
           <ScrollView style={styles.soundsList}>
             {ALARM_SOUNDS.map((sound) => (
@@ -545,7 +579,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 30,
+    marginBottom: 20,
   },
   modalTitle: {
     fontSize: 18,
@@ -554,6 +588,25 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     fontSize: 16,
+    color: '#8b5cf6',
+  },
+  addSoundButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    borderWidth: 1,
+    borderColor: '#8b5cf6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    gap: 10,
+  },
+  addSoundButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#8b5cf6',
   },
   soundsList: {
