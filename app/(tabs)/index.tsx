@@ -12,9 +12,11 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Plus, CreditCard as Edit, Trash2, Bell } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { scheduleAlarmNotification, cancelNotification } from '@/services/notificationService';
+import * as Notifications from 'expo-notifications';
+import { scheduleAlarmNotification, cancelNotification, stopCurrentAlarm } from '@/services/notificationService';
 import { AlarmPicker } from '@/components/AlarmPicker';
 import { WeatherWidget } from '@/components/WeatherWidget';
+import { CustomAlert } from '@/components/CustomAlert';
 
 interface Alarm {
   id: string;
@@ -38,11 +40,26 @@ export default function AlarmsScreen() {
   const [showModal, setShowModal] = useState(false);
   const [editingAlarm, setEditingAlarm] = useState<Alarm | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [showAlarmAlert, setShowAlarmAlert] = useState(false);
+  const [currentAlarmLabel, setCurrentAlarmLabel] = useState('');
 
   useEffect(() => {
     loadAlarms();
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Écouter les notifications d'alarme
+  useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(notification => {
+      if (notification.request.content.categoryIdentifier === 'alarm') {
+        const label = notification.request.content.body || 'Alarme';
+        setCurrentAlarmLabel(label);
+        setShowAlarmAlert(true);
+      }
+    });
+
+    return () => subscription.remove();
   }, []);
 
   const loadAlarms = async () => {
@@ -162,6 +179,15 @@ export default function AlarmsScreen() {
     });
   };
 
+  const handleStopAlarm = async () => {
+    try {
+      await stopCurrentAlarm();
+      setShowAlarmAlert(false);
+    } catch (error) {
+      console.error('Erreur lors de l\'arrêt de l\'alarme:', error);
+    }
+  };
+
   return (
     <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -260,6 +286,17 @@ export default function AlarmsScreen() {
           }}
         />
       </Modal>
+
+      {/* Alerte d'alarme déclenchée */}
+      <CustomAlert
+        visible={showAlarmAlert}
+        title="⏰ Alarme !"
+        message={currentAlarmLabel}
+        icon="alarm"
+        showStopButton={true}
+        onStop={handleStopAlarm}
+        onDismiss={handleStopAlarm}
+      />
     </LinearGradient>
   );
 }
