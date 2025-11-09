@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Plus, CreditCard as Edit, Trash2, Bell } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { scheduleAlarmNotification, cancelNotification, stopCurrentAlarm } from '@/services/notificationService';
+import { scheduleAlarmNotification, cancelNotification, stopCurrentAlarm, triggerAlarm } from '@/services/notificationService';
 import { AlarmPicker } from '@/components/AlarmPicker';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { CustomAlert } from '@/components/CustomAlert';
@@ -51,9 +51,15 @@ export default function AlarmsScreen() {
 
   // Écouter les notifications d'alarme
   useEffect(() => {
-    const subscription = Notifications.addNotificationReceivedListener(notification => {
+    const subscription = Notifications.addNotificationReceivedListener(async notification => {
       if (notification.request.content.categoryIdentifier === 'alarm') {
         const label = notification.request.content.body || 'Alarme';
+        const data = notification.request.content.data || {};
+
+        // Déclencher l'alarme avec toutes les fonctionnalités
+        await triggerAlarm(data);
+
+        // Afficher la modale
         setCurrentAlarmLabel(label);
         setShowAlarmAlert(true);
       }

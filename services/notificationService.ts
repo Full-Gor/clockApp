@@ -8,55 +8,11 @@ import { ttsManager } from './ttsService';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldPlaySound: true,
+    shouldPlaySound: false, // On gère le son manuellement
     shouldSetBadge: false,
   }),
 });
 
-// Écouter les notifications reçues
-Notifications.addNotificationReceivedListener(async notification => {
-  console.log('Notification reçue:', notification);
-
-  // Déclencher l'alarme avec toutes les fonctionnalités avancées
-  if (notification.request.content.categoryIdentifier === 'alarm') {
-    const data = notification.request.content.data || {};
-    const soundId = data.sound || 'classic';
-    const useFadeIn = data.useFadeIn || false;
-    const fadeInDuration = data.fadeInDuration || 5;
-    const useBrightnessControl = data.useBrightnessControl || false;
-    const brightnessLevel = data.brightnessLevel || 1.0;
-    const useVoiceNotification = data.useVoiceNotification || false;
-    const voiceMessage = data.voiceMessage || '';
-    const voiceLoop = data.voiceLoop || false;
-    const voiceLoopInterval = data.voiceLoopInterval || 10;
-
-    try {
-      // 1. Contrôle de la luminosité
-      if (useBrightnessControl) {
-        await brightnessManager.initialize();
-        await brightnessManager.setBrightnessFade(brightnessLevel, 2000);
-      }
-
-      // 2. Jouer le son avec ou sans fade-in
-      if (useFadeIn) {
-        await soundManager.playAlarmWithFadeIn(soundId, fadeInDuration * 1000);
-      } else {
-        await soundManager.playAlarmSound(soundId);
-      }
-
-      // 3. Notification vocale
-      if (useVoiceNotification && voiceMessage) {
-        if (voiceLoop) {
-          await ttsManager.speakLoop(voiceMessage, voiceLoopInterval * 1000);
-        } else {
-          await ttsManager.speak(voiceMessage);
-        }
-      }
-    } catch (error) {
-      console.error('Erreur lors du déclenchement de l\'alarme:', error);
-    }
-  }
-});
 export const initializeNotifications = async () => {
   // Demander la permission pour les notifications
   const { status } = await Notifications.requestPermissionsAsync();
@@ -223,5 +179,45 @@ export const stopCurrentAlarm = async () => {
     console.log('Alarme arrêtée complètement');
   } catch (error) {
     console.error('Erreur lors de l\'arrêt de l\'alarme:', error);
+  }
+};
+
+// Fonction pour déclencher une alarme avec toutes ses fonctionnalités
+export const triggerAlarm = async (notificationData: any) => {
+  const data = notificationData || {};
+  const soundId = data.sound || 'classic';
+  const useFadeIn = data.useFadeIn || false;
+  const fadeInDuration = data.fadeInDuration || 5;
+  const useBrightnessControl = data.useBrightnessControl || false;
+  const brightnessLevel = data.brightnessLevel || 1.0;
+  const useVoiceNotification = data.useVoiceNotification || false;
+  const voiceMessage = data.voiceMessage || '';
+  const voiceLoop = data.voiceLoop || false;
+  const voiceLoopInterval = data.voiceLoopInterval || 10;
+
+  try {
+    // 1. Contrôle de la luminosité
+    if (useBrightnessControl) {
+      await brightnessManager.initialize();
+      await brightnessManager.setBrightnessFade(brightnessLevel, 2000);
+    }
+
+    // 2. Jouer le son avec ou sans fade-in
+    if (useFadeIn) {
+      await soundManager.playAlarmWithFadeIn(soundId, fadeInDuration * 1000);
+    } else {
+      await soundManager.playAlarmSound(soundId);
+    }
+
+    // 3. Notification vocale
+    if (useVoiceNotification && voiceMessage) {
+      if (voiceLoop) {
+        await ttsManager.speakLoop(voiceMessage, voiceLoopInterval * 1000);
+      } else {
+        await ttsManager.speak(voiceMessage);
+      }
+    }
+  } catch (error) {
+    console.error('Erreur lors du déclenchement de l\'alarme:', error);
   }
 };
