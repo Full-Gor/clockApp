@@ -8,6 +8,11 @@
     "scheme": "modernclock",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.modernclock.app",
@@ -60,7 +65,9 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Cette application utilise votre localisation pour afficher la météo locale."
         }
-      ]
+      ],
+      "expo-av",
+      "expo-document-picker"
     ],
     "experiments": {
       "typedRoutes": true
