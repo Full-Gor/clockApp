@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -42,6 +42,7 @@ export default function AlarmsScreen() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showAlarmAlert, setShowAlarmAlert] = useState(false);
   const [currentAlarmLabel, setCurrentAlarmLabel] = useState('');
+  const lastTriggerTime = useRef<number>(0);
 
   useEffect(() => {
     loadAlarms();
@@ -53,6 +54,14 @@ export default function AlarmsScreen() {
   useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener(async notification => {
       if (notification.request.content.categoryIdentifier === 'alarm') {
+        // Éviter les déclenchements multiples rapides (debounce de 2 secondes)
+        const now = Date.now();
+        if (now - lastTriggerTime.current < 2000) {
+          console.log('Alarme ignorée - trop rapide après la dernière');
+          return;
+        }
+        lastTriggerTime.current = now;
+
         const label = notification.request.content.body || 'Alarme';
         const data = notification.request.content.data || {};
 

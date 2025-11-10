@@ -6,10 +6,12 @@ import {
   TouchableOpacity,
   ScrollView,
   Animated,
+  AppState,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, RotateCcw, Flag } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Lap {
   id: number;
@@ -26,6 +28,60 @@ export default function StopwatchScreen() {
   const accumulatedTimeRef = useRef<number>(0);
   const pulseAnimation = useRef(new Animated.Value(1)).current;
   const scaleAnimation = useRef(new Animated.Value(1)).current;
+
+  // Restaurer l'état au montage
+  useEffect(() => {
+    loadStopwatchState();
+  }, []);
+
+  // Gérer le passage en arrière-plan
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [isRunning, time, laps]);
+
+  const loadStopwatchState = async () => {
+    try {
+      const state = await AsyncStorage.getItem('stopwatchState');
+      if (state) {
+        const { isRunning: wasRunning, startTime, accumulated, savedLaps } = JSON.parse(state);
+        if (wasRunning) {
+          const elapsed = Date.now() - startTime + accumulated;
+          accumulatedTimeRef.current = elapsed;
+          setTime(elapsed);
+          setIsRunning(true);
+        } else if (accumulated > 0) {
+          accumulatedTimeRef.current = accumulated;
+          setTime(accumulated);
+        }
+        if (savedLaps) {
+          setLaps(savedLaps);
+        }
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du chrono:', error);
+    }
+  };
+
+  const saveStopwatchState = async () => {
+    try {
+      const state = {
+        isRunning,
+        startTime: startTimeRef.current,
+        accumulated: accumulatedTimeRef.current,
+        savedLaps: laps,
+      };
+      await AsyncStorage.setItem('stopwatchState', JSON.stringify(state));
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde du chrono:', error);
+    }
+  };
+
+  const handleAppStateChange = (nextAppState: string) => {
+    if (nextAppState === 'background' || nextAppState === 'inactive') {
+      saveStopwatchState();
+    }
+  };
 
   useEffect(() => {
     if (isRunning) {

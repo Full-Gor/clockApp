@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, RotateCcw, Settings, Volume2, VolumeX, Bell, Upload } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { soundManager, ALARM_SOUNDS } from '@/services/soundService';
 import { TimerPicker } from '@/components/TimerPicker';
@@ -30,6 +31,7 @@ export default function TimerScreen() {
   const [showCompletionAlert, setShowCompletionAlert] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const endTimeRef = useRef<number>(0);
+  const timerNotificationId = useRef<string | null>(null);
 
   // Charger les sons personnalisés au montage du composant
   useEffect(() => {
@@ -52,9 +54,31 @@ export default function TimerScreen() {
     }
   }, [showSoundPicker]);
 
+  // Écouter les notifications du minuteur
+  useEffect(() => {
+    const subscription = Notifications.addNotificationReceivedListener(async notification => {
+      if (notification.request.content.categoryIdentifier === 'timer') {
+        const soundId = notification.request.content.data?.sound || 'classic';
+
+        // Jouer le son
+        if (!isMuted) {
+          await soundManager.playAlarmSound(soundId);
+        }
+
+        // Afficher la modale
+        setShowCompletionAlert(true);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isMuted]);
+
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
       endTimeRef.current = Date.now() + (timeLeft * 1000);
+
+      // Programmer une notification locale pour la fin du minuteur
+      scheduleTimerNotification(timeLeft);
 
       intervalRef.current = setInterval(() => {
         const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
@@ -74,6 +98,8 @@ export default function TimerScreen() {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      // Annuler la notification si le minuteur est arrêté
+      cancelTimerNotification();
     }
 
     return () => {
@@ -107,6 +133,44 @@ export default function TimerScreen() {
   const handleStopAlarm = async () => {
     await soundManager.stopCurrentAlarm();
     setShowCompletionAlert(false);
+  };
+
+  const scheduleTimerNotification = async (seconds: number) => {
+    try {
+      // Annuler toute notification précédente
+      await cancelTimerNotification();
+
+      // Programmer la nouvelle notification
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '⏰ Minuteur terminé !',
+          body: 'Votre minuteur est arrivé à terme.',
+          sound: true,
+          categoryIdentifier: 'timer',
+          data: {
+            sound: selectedSound,
+          },
+        },
+        trigger: {
+          seconds: seconds,
+        },
+      });
+
+      timerNotificationId.current = notificationId;
+    } catch (error) {
+      console.error('Erreur lors de la programmation de la notification:', error);
+    }
+  };
+
+  const cancelTimerNotification = async () => {
+    try {
+      if (timerNotificationId.current) {
+        await Notifications.cancelScheduledNotificationAsync(timerNotificationId.current);
+        timerNotificationId.current = null;
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'annulation de la notification:', error);
+    }
   };
 
   const formatTime = (seconds: number) => {
