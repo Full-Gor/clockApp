@@ -17,6 +17,7 @@ import { scheduleAlarmNotification, cancelNotification, stopCurrentAlarm, trigge
 import { AlarmPicker } from '@/components/AlarmPicker';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { CustomAlert } from '@/components/CustomAlert';
+import { GoldenClock } from '@/components/GoldenClock';
 
 interface Alarm {
   id: string;
@@ -206,10 +207,9 @@ export default function AlarmsScreen() {
   return (
     <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header avec l'heure actuelle */}
-        <View style={styles.header}>
-          <Text style={styles.currentTime}>{formatTime(currentTime)}</Text>
-          <Text style={styles.currentDate}>{formatDate(currentTime)}</Text>
+        {/* Horloge Dorée */}
+        <View style={styles.clockWrapper}>
+          <GoldenClock />
         </View>
 
         {/* Widget Météo */}
@@ -322,24 +322,12 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingTop: 60,
+    paddingTop: 20,
   },
-  header: {
+  clockWrapper: {
     alignItems: 'center',
-    marginBottom: 30,
-    paddingHorizontal: 20,
-  },
-  currentTime: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -1,
-  },
-  currentDate: {
-    fontSize: 16,
-    color: '#9ca3af',
-    textTransform: 'capitalize',
-    marginTop: 4,
+    marginBottom: 20,
+    marginTop: 10,
   },
   section: {
     paddingHorizontal: 20,
