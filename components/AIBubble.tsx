@@ -67,10 +67,19 @@ const AI_TEXTS: Record<string, {
     title: 'Assistant IA',
     subtitle: 'Propulsé par Groq',
     hello: 'Bonjour !',
-    welcome: 'Je suis votre assistant IA. Posez-moi des questions sur l\'heure, les alarmes, la productivité ou discutons simplement !',
+    welcome: 'Je suis votre assistant IA. Je peux créer des alarmes, démarrer le chrono, mettre des timers, ou discuter avec vous !',
     placeholder: 'Écrivez votre message...',
     error: 'Désolé, une erreur est survenue. Veuillez réessayer.',
-    systemPrompt: 'Tu es un assistant IA intégré dans une application d\'horloge et d\'alarmes. Tu es amical, concis et utile. Tu peux aider avec des questions sur l\'heure, les fuseaux horaires, la gestion du temps, la productivité, ou simplement discuter. Réponds toujours en français.',
+    systemPrompt: `Tu es un assistant IA intégré dans une application d'horloge et d'alarmes. Tu es amical, concis et utile.
+
+IMPORTANT: Quand l'utilisateur demande une ACTION, tu DOIS inclure un marqueur d'action dans ta réponse:
+- Pour créer une alarme: [ACTION:ALARM:HH:MM:label] (ex: [ACTION:ALARM:07:30:Réveil matin])
+- Pour démarrer un timer: [ACTION:TIMER:minutes] (ex: [ACTION:TIMER:5])
+- Pour démarrer le chrono: [ACTION:STOPWATCH:START]
+- Pour arrêter le chrono: [ACTION:STOPWATCH:STOP]
+- Pour les rounds: [ACTION:ROUNDS:work:rest:count] (ex: [ACTION:ROUNDS:30:10:8])
+
+Réponds TOUJOURS en français et inclus le marqueur d'action approprié quand tu exécutes une commande.`,
   },
   en: {
     title: 'AI Assistant',
@@ -137,11 +146,21 @@ const AI_TEXTS: Record<string, {
   },
 };
 
-interface AIBubbleProps {
-  language?: string;
+// Actions que l'IA peut exécuter
+export interface AIActions {
+  onSetAlarm?: (time: string, label?: string) => void;
+  onStartTimer?: (minutes: number) => void;
+  onStartStopwatch?: () => void;
+  onStopStopwatch?: () => void;
+  onStartRounds?: (workTime: number, restTime: number, rounds: number) => void;
 }
 
-export const AIBubble: React.FC<AIBubbleProps> = ({ language = 'fr' }) => {
+interface AIBubbleProps {
+  language?: string;
+  actions?: AIActions;
+}
+
+export const AIBubble: React.FC<AIBubbleProps> = ({ language = 'fr', actions }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
@@ -217,74 +236,71 @@ export const AIBubble: React.FC<AIBubbleProps> = ({ language = 'fr' }) => {
       }, index * 50);
     });
 
-    // Phase 2: Faire converger les particules vers le centre
+    // Phase 2: Faire converger les particules vers le centre (plus rapide)
     setTimeout(() => {
       const animations = newParticles.map((particle, index) => {
         return Animated.parallel([
           Animated.timing(particle.animX, {
             toValue: 0,
-            duration: 600 + index * 30,
+            duration: 400 + index * 15, // Plus rapide
             useNativeDriver: true,
           }),
           Animated.timing(particle.animY, {
             toValue: 0,
-            duration: 600 + index * 30,
+            duration: 400 + index * 15, // Plus rapide
             useNativeDriver: true,
           }),
           Animated.timing(particle.animScale, {
-            toValue: 0.8,
-            duration: 500,
+            toValue: 0.6,
+            duration: 350,
             useNativeDriver: true,
           }),
         ]);
       });
 
-      Animated.parallel(animations).start();
-    }, NUM_PARTICLES * 50 + 100);
+      Animated.parallel(animations).start(() => {
+        // Phase 3: Immédiatement après convergence - faire apparaître l'IA
+        // Faire disparaître les particules rapidement
+        newParticles.forEach((particle) => {
+          Animated.timing(particle.animOpacity, {
+            toValue: 0,
+            duration: 100, // Très rapide
+            useNativeDriver: true,
+          }).start();
+        });
 
-    // Phase 3: Fusion - faire disparaître les particules et apparaître la bulle principale
-    setTimeout(() => {
-      // Faire disparaître les particules
-      newParticles.forEach((particle, index) => {
-        Animated.timing(particle.animOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      });
-
-      // Effet de glow avant l'apparition
-      Animated.sequence([
+        // Effet de glow rapide
         Animated.timing(glowAnim, {
           toValue: 1,
-          duration: 150,
+          duration: 80,
           useNativeDriver: true,
-        }),
-        Animated.timing(glowAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
+        }).start(() => {
+          Animated.timing(glowAnim, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }).start();
+        });
 
-      // Faire apparaître la bulle principale avec un effet de rebond
-      Animated.parallel([
-        Animated.spring(mainBubbleScale, {
-          toValue: 1,
-          friction: 4,
-          tension: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(mainBubbleOpacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setIsForming(false);
-        startPulseAnimation();
+        // Faire apparaître la bulle principale IMMEDIATEMENT
+        Animated.parallel([
+          Animated.spring(mainBubbleScale, {
+            toValue: 1,
+            friction: 5,
+            tension: 120,
+            useNativeDriver: true,
+          }),
+          Animated.timing(mainBubbleOpacity, {
+            toValue: 1,
+            duration: 150, // Plus rapide
+            useNativeDriver: true,
+          }),
+        ]).start(() => {
+          setIsForming(false);
+          startPulseAnimation();
+        });
       });
-    }, NUM_PARTICLES * 50 + 800);
+    }, NUM_PARTICLES * 40 + 50); // Démarrer plus tôt
   };
 
   const startPulseAnimation = () => {
@@ -312,6 +328,66 @@ export const AIBubble: React.FC<AIBubbleProps> = ({ language = 'fr' }) => {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Parser et exécuter les actions dans la réponse de l'IA
+  const parseAndExecuteActions = (content: string) => {
+    if (!actions) return content;
+
+    // Pattern pour détecter les marqueurs d'action
+    const actionPattern = /\[ACTION:(\w+):([^\]]+)\]/g;
+    let match;
+    let cleanContent = content;
+
+    while ((match = actionPattern.exec(content)) !== null) {
+      const actionType = match[1];
+      const params = match[2].split(':');
+
+      switch (actionType) {
+        case 'ALARM':
+          if (actions.onSetAlarm && params.length >= 2) {
+            const time = `${params[0]}:${params[1]}`;
+            const label = params[2] || 'Alarme';
+            actions.onSetAlarm(time, label);
+            console.log(`Action exécutée: Alarme à ${time} - ${label}`);
+          }
+          break;
+        case 'TIMER':
+          if (actions.onStartTimer && params[0]) {
+            const minutes = parseInt(params[0], 10);
+            if (!isNaN(minutes)) {
+              actions.onStartTimer(minutes);
+              console.log(`Action exécutée: Timer de ${minutes} minutes`);
+            }
+          }
+          break;
+        case 'STOPWATCH':
+          if (params[0] === 'START' && actions.onStartStopwatch) {
+            actions.onStartStopwatch();
+            console.log('Action exécutée: Chrono démarré');
+          } else if (params[0] === 'STOP' && actions.onStopStopwatch) {
+            actions.onStopStopwatch();
+            console.log('Action exécutée: Chrono arrêté');
+          }
+          break;
+        case 'ROUNDS':
+          if (actions.onStartRounds && params.length >= 3) {
+            const workTime = parseInt(params[0], 10);
+            const restTime = parseInt(params[1], 10);
+            const rounds = parseInt(params[2], 10);
+            if (!isNaN(workTime) && !isNaN(restTime) && !isNaN(rounds)) {
+              actions.onStartRounds(workTime, restTime, rounds);
+              console.log(`Action exécutée: Rounds ${workTime}s/${restTime}s x${rounds}`);
+            }
+          }
+          break;
+      }
+
+      // Supprimer le marqueur d'action du texte affiché
+      cleanContent = cleanContent.replace(match[0], '').trim();
+    }
+
+    return cleanContent;
+  };
 
   // Envoyer un message à l'API Groq
   const sendMessage = async () => {
@@ -352,10 +428,14 @@ export const AIBubble: React.FC<AIBubbleProps> = ({ language = 'fr' }) => {
       const data = await response.json();
 
       if (data.choices && data.choices[0]) {
+        const rawContent = data.choices[0].message.content;
+        // Parser et exécuter les actions, puis nettoyer le contenu
+        const cleanContent = parseAndExecuteActions(rawContent);
+
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: data.choices[0].message.content,
+          content: cleanContent,
         };
         setMessages(prev => [...prev, assistantMessage]);
       }

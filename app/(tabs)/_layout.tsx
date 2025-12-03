@@ -3,23 +3,34 @@ import { Clock, AlarmClock as Alarm, Timer, Watch as Stopwatch, Dumbbell } from 
 import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AIBubble } from '@/components/AIBubble';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAIActions } from '@/contexts/AIActionsContext';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const [bubbleKey, setBubbleKey] = useState(0);
   const { language, t } = useLanguage();
+  const aiActions = useAIActions();
 
   // Réinitialiser la bulle à chaque changement de page
   useEffect(() => {
     setBubbleKey(prev => prev + 1);
   }, [pathname]);
 
+  // Callbacks pour les actions de l'IA
+  const actionCallbacks = useMemo(() => ({
+    onSetAlarm: aiActions.handleSetAlarm,
+    onStartTimer: aiActions.handleStartTimer,
+    onStartStopwatch: aiActions.handleStartStopwatch,
+    onStopStopwatch: aiActions.handleStopStopwatch,
+    onStartRounds: aiActions.handleStartRounds,
+  }), [aiActions]);
+
   return (
     <View style={{ flex: 1 }}>
-      <AIBubble key={bubbleKey} language={language} />
+      <AIBubble key={bubbleKey} language={language} actions={actionCallbacks} />
       <Tabs
       screenOptions={{
         headerShown: false,

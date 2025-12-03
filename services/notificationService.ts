@@ -9,9 +9,27 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: false, // On gère le son manuellement
-    shouldSetBadge: false,
+    shouldSetBadge: true, // Afficher badge sur l'icône
   }),
 });
+
+// Fonction pour mettre à jour le badge
+export const updateBadgeCount = async (count: number) => {
+  try {
+    await Notifications.setBadgeCountAsync(count);
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du badge:', error);
+  }
+};
+
+// Fonction pour réinitialiser le badge
+export const clearBadge = async () => {
+  try {
+    await Notifications.setBadgeCountAsync(0);
+  } catch (error) {
+    console.error('Erreur lors de la réinitialisation du badge:', error);
+  }
+};
 
 export const initializeNotifications = async () => {
   // Demander la permission pour les notifications
@@ -55,15 +73,17 @@ export const scheduleAlarmNotification = async (alarm: AlarmData) => {
 
     const [hours, minutes] = alarm.time.split(':').map(Number);
     const now = new Date();
-    
+
     // Si c'est tous les jours ou des jours spécifiques
     if (alarm.days.length === 7 || alarm.days.length === 0) {
       // Alarme quotidienne
       const trigger = new Date();
       trigger.setHours(hours, minutes, 0, 0);
-      
-      // Si l'heure est déjà passée aujourd'hui, programmer pour demain
-      if (trigger <= now) {
+
+      // Si l'heure est déjà passée aujourd'hui ou dans les 60 prochaines secondes, programmer pour demain
+      // Cela évite les déclenchements immédiats lors de la création d'alarme
+      const bufferMs = 60000; // 60 secondes de marge
+      if (trigger.getTime() <= now.getTime() + bufferMs) {
         trigger.setDate(trigger.getDate() + 1);
       }
 
