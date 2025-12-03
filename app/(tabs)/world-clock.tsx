@@ -161,57 +161,60 @@ export default function WorldClockScreen() {
           </View>
         )}
 
-        <View style={styles.clocksContainer}>
-          {clocks.map((clock, index) => {
-            const time = getTimeInTimezone(clock.timezone);
-            const timeDiff = getTimeDifference(clock.timezone);
-            const isToday = time.isSame(moment(), 'day');
-            const dayText = isToday ? 'Aujourd\'hui' : 
-                           time.isAfter(moment(), 'day') ? 'Demain' : 'Hier';
+        {/* World clocks list - only show when digital clock is selected */}
+        {selectedClock === 'digital' && (
+          <View style={styles.clocksContainer}>
+            {clocks.map((clock, index) => {
+              const time = getTimeInTimezone(clock.timezone);
+              const timeDiff = getTimeDifference(clock.timezone);
+              const isToday = time.isSame(moment(), 'day');
+              const dayText = isToday ? 'Aujourd\'hui' :
+                             time.isAfter(moment(), 'day') ? 'Demain' : 'Hier';
 
-            return (
-              <TouchableOpacity
-                key={clock.id}
-                style={[styles.clockItem, index === 0 && styles.firstClockItem]}
-                onLongPress={() => index > 0 && removeClock(clock.id)}
-              >
-                <LinearGradient
-                  colors={index === 0 ? ['#8b5cf6', '#7c3aed'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
-                  style={styles.clockGradient}
+              return (
+                <TouchableOpacity
+                  key={clock.id}
+                  style={[styles.clockItem, index === 0 && styles.firstClockItem]}
+                  onLongPress={() => index > 0 && removeClock(clock.id)}
                 >
-                  <View style={styles.clockHeader}>
-                    <View style={styles.clockInfo}>
-                      <Text style={[styles.cityName, index === 0 && styles.primaryCity]}>
-                        {clock.city}
+                  <LinearGradient
+                    colors={index === 0 ? ['#8b5cf6', '#7c3aed'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+                    style={styles.clockGradient}
+                  >
+                    <View style={styles.clockHeader}>
+                      <View style={styles.clockInfo}>
+                        <Text style={[styles.cityName, index === 0 && styles.primaryCity]}>
+                          {clock.city}
+                        </Text>
+                        <Text style={[styles.countryName, index === 0 && styles.primaryCountry]}>
+                          {clock.country}
+                        </Text>
+                      </View>
+                      <View style={styles.timeInfo}>
+                        <Text style={[styles.timeDiff, index === 0 && styles.primaryTimeDiff]}>
+                          {timeDiff}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.clockTime}>
+                      <Text style={[styles.time, index === 0 && styles.primaryTime]}>
+                        {time.format('HH:mm')}
                       </Text>
-                      <Text style={[styles.countryName, index === 0 && styles.primaryCountry]}>
-                        {clock.country}
+                      <Text style={[styles.seconds, index === 0 && styles.primarySeconds]}>
+                        {time.format('ss')}
                       </Text>
                     </View>
-                    <View style={styles.timeInfo}>
-                      <Text style={[styles.timeDiff, index === 0 && styles.primaryTimeDiff]}>
-                        {timeDiff}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.clockTime}>
-                    <Text style={[styles.time, index === 0 && styles.primaryTime]}>
-                      {time.format('HH:mm')}
+
+                    <Text style={[styles.dayText, index === 0 && styles.primaryDayText]}>
+                      {dayText}
                     </Text>
-                    <Text style={[styles.seconds, index === 0 && styles.primarySeconds]}>
-                      {time.format('ss')}
-                    </Text>
-                  </View>
-                  
-                  <Text style={[styles.dayText, index === 0 && styles.primaryDayText]}>
-                    {dayText}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
       {/* Clock Selector Modal */}
