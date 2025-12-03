@@ -58,6 +58,8 @@ class SoundManager {
   private sounds: Map<string, Audio.Sound> = new Map();
   private isInitialized = false;
   private customSoundsLoaded = false;
+  private fadeInterval: NodeJS.Timeout | null = null;
+  private currentAlarmSound: Audio.Sound | null = null;
 
   async initialize() {
     if (this.isInitialized) return;
@@ -142,18 +144,10 @@ class SoundManager {
         return this.createWebBeep(frequency, duration);
       }
 
-      // Pour mobile, créer un son synthétique plus audible
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: this.generateBeepDataUri(frequency, duration) },
-        { 
-          shouldPlay: false, 
-          isLooping: false,
-          volume: 1.0,
-          rate: 1.0,
-        }
-      );
-      
-      return sound;
+      // Sur mobile, ne pas utiliser les sons synthétiques (ne fonctionnent pas bien)
+      // À la place, utiliser les vibrations uniquement
+      console.log('Les sons synthétiques ne sont pas supportés sur mobile. Utilisez des fichiers MP3 personnalisés.');
+      return null;
     } catch (error) {
       console.error('Erreur lors de la création du son:', error);
       return null;
@@ -215,46 +209,48 @@ class SoundManager {
     if (!soundOption) return;
 
     try {
-      // Jouer le son avec vibrations
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-
       // Si le son a un fichier MP3, l'utiliser
       if (soundOption.fileUri) {
-        await this.playAudioFile(soundOption.fileUri, true);
-      } else if (soundOption.pattern) {
-        // Fallback : Créer et jouer le son synthétique avec un pattern
-        for (let i = 0; i < soundOption.pattern.length; i += 2) {
-          const delay = soundOption.pattern[i];
-          const duration = soundOption.pattern[i + 1] || 500;
-
-          setTimeout(async () => {
-            const sound = await this.createBeepSound(soundOption.frequency || 800, duration);
-            if (sound) {
-              await sound.playAsync();
-              setTimeout(async () => {
-                try {
-                  await sound.unloadAsync();
-                } catch (error) {
-                  console.error('Erreur lors du nettoyage du son:', error);
-                }
-              }, duration + 100);
-            }
-          }, delay);
+        // Vibration pour signaler le démarrage
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
+        await this.playAudioFile(soundOption.fileUri, true);
       } else {
-        // Son synthétique simple
-        const sound = await this.createBeepSound(soundOption.frequency || 800, 1000);
-        if (sound) {
-          await sound.playAsync();
-          setTimeout(async () => {
-            try {
-              await sound.unloadAsync();
-            } catch (error) {
-              console.error('Erreur lors du nettoyage du son:', error);
+        // Pas de fichier MP3 : utiliser vibrations répétées
+        if (Platform.OS !== 'web') {
+          console.log(`Alarme "${soundOption.name}" : Pas de fichier audio. Utilisez "Ajouter MP3" pour ajouter un son personnalisé.`);
+
+          // Vibrations répétées pour simuler une alarme
+          const vibratePattern = async () => {
+            for (let i = 0; i < 10; i++) {
+              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              await new Promise(resolve => setTimeout(resolve, 500));
             }
-          }, 2000);
+          };
+          vibratePattern();
+        } else {
+          // Sur web, essayer le son synthétique
+          if (soundOption.pattern) {
+            for (let i = 0; i < soundOption.pattern.length; i += 2) {
+              const delay = soundOption.pattern[i];
+              const duration = soundOption.pattern[i + 1] || 500;
+
+              setTimeout(async () => {
+                const sound = await this.createBeepSound(soundOption.frequency || 800, duration);
+                if (sound) {
+                  await sound.playAsync();
+                  setTimeout(async () => {
+                    try {
+                      await sound.unloadAsync();
+                    } catch (error) {
+                      console.error('Erreur lors du nettoyage du son:', error);
+                    }
+                  }, duration + 100);
+                }
+              }, delay);
+            }
+          }
         }
       }
     } catch (error) {
@@ -306,12 +302,12 @@ class SoundManager {
     if (!soundOption) return;
 
     try {
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-
       // Si le son a un fichier MP3, l'utiliser pour la preview
       if (soundOption.fileUri) {
+        if (Platform.OS !== 'web') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+
         const { sound } = await Audio.Sound.createAsync(
           { uri: soundOption.fileUri },
           {
@@ -331,17 +327,23 @@ class SoundManager {
           }
         }, 3000);
       } else {
-        // Fallback : Jouer un court extrait du son synthétique
-        const sound = await this.createBeepSound(soundOption.frequency || 800, 300);
-        if (sound) {
-          await sound.playAsync();
-          setTimeout(async () => {
-            try {
-              await sound.unloadAsync();
-            } catch (error) {
-              console.error('Erreur lors du nettoyage du son preview:', error);
-            }
-          }, 500);
+        // Pas de fichier MP3 : juste vibration sur mobile
+        if (Platform.OS !== 'web') {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          console.log(`Son "${soundOption.name}" : Ajoutez un fichier MP3 personnalisé pour entendre le son`);
+        } else {
+          // Sur web, essayer le son synthétique
+          const sound = await this.createBeepSound(soundOption.frequency || 800, 300);
+          if (sound) {
+            await sound.playAsync();
+            setTimeout(async () => {
+              try {
+                await sound.unloadAsync();
+              } catch (error) {
+                console.error('Erreur lors du nettoyage du son preview:', error);
+              }
+            }, 500);
+          }
         }
       }
     } catch (error) {
@@ -349,7 +351,100 @@ class SoundManager {
     }
   }
 
+  // Jouer une alarme avec volume progressif
+  async playAlarmWithFadeIn(soundId: string, fadeDuration: number = 5000): Promise<void> {
+    await this.initialize();
+
+    const soundOption = ALARM_SOUNDS.find(s => s.id === soundId);
+    if (!soundOption) return;
+
+    try {
+      if (soundOption.fileUri) {
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: soundOption.fileUri },
+          {
+            shouldPlay: true,
+            isLooping: true,
+            volume: 0, // Commencer à volume 0
+          }
+        );
+
+        this.currentAlarmSound = sound;
+        this.sounds.set('current_alarm', sound);
+
+        // Augmenter progressivement le volume
+        const steps = 50;
+        const stepDuration = fadeDuration / steps;
+        let currentStep = 0;
+
+        this.fadeInterval = setInterval(async () => {
+          currentStep++;
+          const volume = currentStep / steps;
+
+          try {
+            await sound.setVolumeAsync(Math.min(volume, 1));
+          } catch (error) {
+            console.error('Erreur lors du réglage du volume:', error);
+          }
+
+          if (currentStep >= steps) {
+            if (this.fadeInterval) {
+              clearInterval(this.fadeInterval);
+              this.fadeInterval = null;
+            }
+          }
+        }, stepDuration);
+      } else {
+        // Fallback sans fade-in
+        await this.playAlarmSound(soundId);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la lecture du son avec fade-in:', error);
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }
+    }
+  }
+
+  // Arrêter le son en cours
+  async stopCurrentAlarm(): Promise<void> {
+    try {
+      // Arrêter le fade-in en cours
+      if (this.fadeInterval) {
+        clearInterval(this.fadeInterval);
+        this.fadeInterval = null;
+      }
+
+      // Arrêter le son actuel
+      if (this.currentAlarmSound) {
+        await this.currentAlarmSound.stopAsync();
+        await this.currentAlarmSound.unloadAsync();
+        this.currentAlarmSound = null;
+      }
+
+      // Nettoyer les sons stockés
+      const alarmSound = this.sounds.get('current_alarm');
+      if (alarmSound) {
+        try {
+          await alarmSound.stopAsync();
+          await alarmSound.unloadAsync();
+        } catch (error) {
+          // Ignorer les erreurs de nettoyage
+        }
+        this.sounds.delete('current_alarm');
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'arrêt du son:', error);
+    }
+  }
+
   async cleanup(): Promise<void> {
+    await this.stopCurrentAlarm();
+
     for (const [id, sound] of this.sounds) {
       try {
         await sound.unloadAsync();

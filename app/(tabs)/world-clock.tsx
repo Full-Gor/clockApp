@@ -9,9 +9,17 @@ import {
   TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Plus, MapPin, Clock } from 'lucide-react-native';
+import { Plus, MapPin, Clock, Settings2 } from 'lucide-react-native';
 import moment from 'moment-timezone';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  HolographicClock,
+  FluidClock,
+  FlapClock,
+  ClockSelector,
+  useClockSelection,
+  ClockType,
+} from '../../components/clocks';
 
 interface WorldClock {
   id: string;
@@ -43,6 +51,25 @@ export default function WorldClockScreen() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showModal, setShowModal] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [showClockSelector, setShowClockSelector] = useState(false);
+  const { selectedClock, setSelectedClock, loading: clockLoading } = useClockSelection();
+
+  // Render the selected clock component
+  const renderSelectedClock = () => {
+    switch (selectedClock) {
+      case 'holographic':
+        return <HolographicClock />;
+      case 'fluid':
+        return <FluidClock />;
+      case 'flap-dark':
+        return <FlapClock theme="dark" />;
+      case 'flap-light':
+        return <FlapClock theme="light" />;
+      case 'digital':
+      default:
+        return null; // Will show the default world clocks list
+    }
+  };
 
   useEffect(() => {
     loadClocks();
@@ -111,66 +138,92 @@ export default function WorldClockScreen() {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Horloge Mondiale</Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setShowModal(true)}
-          >
-            <Plus size={20} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.clockSelectorButton}
+              onPress={() => setShowClockSelector(true)}
+            >
+              <Settings2 size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShowModal(true)}
+            >
+              <Plus size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.clocksContainer}>
-          {clocks.map((clock, index) => {
-            const time = getTimeInTimezone(clock.timezone);
-            const timeDiff = getTimeDifference(clock.timezone);
-            const isToday = time.isSame(moment(), 'day');
-            const dayText = isToday ? 'Aujourd\'hui' : 
-                           time.isAfter(moment(), 'day') ? 'Demain' : 'Hier';
+        {/* Render selected clock or default */}
+        {selectedClock !== 'digital' && (
+          <View style={styles.selectedClockContainer}>
+            {renderSelectedClock()}
+          </View>
+        )}
 
-            return (
-              <TouchableOpacity
-                key={clock.id}
-                style={[styles.clockItem, index === 0 && styles.firstClockItem]}
-                onLongPress={() => index > 0 && removeClock(clock.id)}
-              >
-                <LinearGradient
-                  colors={index === 0 ? ['#8b5cf6', '#7c3aed'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
-                  style={styles.clockGradient}
+        {/* World clocks list - only show when digital clock is selected */}
+        {selectedClock === 'digital' && (
+          <View style={styles.clocksContainer}>
+            {clocks.map((clock, index) => {
+              const time = getTimeInTimezone(clock.timezone);
+              const timeDiff = getTimeDifference(clock.timezone);
+              const isToday = time.isSame(moment(), 'day');
+              const dayText = isToday ? 'Aujourd\'hui' :
+                             time.isAfter(moment(), 'day') ? 'Demain' : 'Hier';
+
+              return (
+                <TouchableOpacity
+                  key={clock.id}
+                  style={[styles.clockItem, index === 0 && styles.firstClockItem]}
+                  onLongPress={() => index > 0 && removeClock(clock.id)}
                 >
-                  <View style={styles.clockHeader}>
-                    <View style={styles.clockInfo}>
-                      <Text style={[styles.cityName, index === 0 && styles.primaryCity]}>
-                        {clock.city}
+                  <LinearGradient
+                    colors={index === 0 ? ['#8b5cf6', '#7c3aed'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
+                    style={styles.clockGradient}
+                  >
+                    <View style={styles.clockHeader}>
+                      <View style={styles.clockInfo}>
+                        <Text style={[styles.cityName, index === 0 && styles.primaryCity]}>
+                          {clock.city}
+                        </Text>
+                        <Text style={[styles.countryName, index === 0 && styles.primaryCountry]}>
+                          {clock.country}
+                        </Text>
+                      </View>
+                      <View style={styles.timeInfo}>
+                        <Text style={[styles.timeDiff, index === 0 && styles.primaryTimeDiff]}>
+                          {timeDiff}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.clockTime}>
+                      <Text style={[styles.time, index === 0 && styles.primaryTime]}>
+                        {time.format('HH:mm')}
                       </Text>
-                      <Text style={[styles.countryName, index === 0 && styles.primaryCountry]}>
-                        {clock.country}
+                      <Text style={[styles.seconds, index === 0 && styles.primarySeconds]}>
+                        {time.format('ss')}
                       </Text>
                     </View>
-                    <View style={styles.timeInfo}>
-                      <Text style={[styles.timeDiff, index === 0 && styles.primaryTimeDiff]}>
-                        {timeDiff}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.clockTime}>
-                    <Text style={[styles.time, index === 0 && styles.primaryTime]}>
-                      {time.format('HH:mm')}
+
+                    <Text style={[styles.dayText, index === 0 && styles.primaryDayText]}>
+                      {dayText}
                     </Text>
-                    <Text style={[styles.seconds, index === 0 && styles.primarySeconds]}>
-                      {time.format('ss')}
-                    </Text>
-                  </View>
-                  
-                  <Text style={[styles.dayText, index === 0 && styles.primaryDayText]}>
-                    {dayText}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
+
+      {/* Clock Selector Modal */}
+      <ClockSelector
+        visible={showClockSelector}
+        onClose={() => setShowClockSelector(false)}
+        selectedClock={selectedClock}
+        onSelect={setSelectedClock}
+      />
 
       <Modal
         visible={showModal}
@@ -233,12 +286,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 30,
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
     color: '#fff',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  clockSelectorButton: {
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#8b5cf6',
   },
   addButton: {
     backgroundColor: '#8b5cf6',
@@ -247,6 +315,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  selectedClockContainer: {
+    marginHorizontal: 10,
+    marginBottom: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   clocksContainer: {
     paddingHorizontal: 20,
