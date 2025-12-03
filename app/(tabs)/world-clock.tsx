@@ -102,7 +102,7 @@ export default function WorldClockScreen() {
       ...clockData,
       id: Date.now().toString(),
     };
-    
+
     const newClocks = [...clocks, newClock];
     saveClocks(newClocks);
     setShowModal(false);
@@ -123,7 +123,7 @@ export default function WorldClockScreen() {
     const diff = targetTime.utcOffset() - localTime.utcOffset();
     const hours = Math.floor(Math.abs(diff) / 60);
     const minutes = Math.abs(diff) % 60;
-    
+
     const sign = diff >= 0 ? '+' : '-';
     return minutes > 0 ? `${sign}${hours}h${minutes}` : `${sign}${hours}h`;
   };

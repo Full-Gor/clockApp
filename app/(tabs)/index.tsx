@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Plus, CreditCard as Edit, Trash2, Bell } from 'lucide-react-native';
+import { Plus, CreditCard as Edit, Trash2, Bell, Settings2 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { scheduleAlarmNotification, cancelNotification, stopCurrentAlarm, triggerAlarm } from '@/services/notificationService';
@@ -18,6 +18,14 @@ import { AlarmPicker } from '@/components/AlarmPicker';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { CustomAlert } from '@/components/CustomAlert';
 import { GoldenClock } from '@/components/GoldenClock';
+import {
+  HolographicClock,
+  FluidClock,
+  FlapClock,
+  ClockSelector,
+  useClockSelection,
+  ClockType,
+} from '@/components/clocks';
 
 interface Alarm {
   id: string;
@@ -44,6 +52,27 @@ export default function AlarmsScreen() {
   const [showAlarmAlert, setShowAlarmAlert] = useState(false);
   const [currentAlarmLabel, setCurrentAlarmLabel] = useState('');
   const lastTriggerTime = useRef<number>(0);
+  const [showClockSelector, setShowClockSelector] = useState(false);
+  const { selectedClock, setSelectedClock, loading: clockLoading } = useClockSelection();
+
+  // Render the selected clock component
+  const renderSelectedClock = () => {
+    switch (selectedClock) {
+      case 'holographic':
+        return <HolographicClock />;
+      case 'fluid':
+        return <FluidClock />;
+      case 'flap-dark':
+        return <FlapClock theme="dark" />;
+      case 'flap-light':
+        return <FlapClock theme="light" />;
+      case 'golden':
+        return <GoldenClock />;
+      case 'digital':
+      default:
+        return null; // Will show the default digital time
+    }
+  };
 
   useEffect(() => {
     loadAlarms();
@@ -104,14 +133,14 @@ export default function AlarmsScreen() {
       ...alarmData,
       id: Date.now().toString(),
     };
-    
+
     const newAlarms = [...alarms, newAlarm];
     saveAlarms(newAlarms);
-    
+
     if (newAlarm.enabled) {
       scheduleAlarmNotification(newAlarm);
     }
-    
+
     // Fermer la modale et réinitialiser l'état
     setShowModal(false);
     setEditingAlarm(null);
@@ -120,24 +149,24 @@ export default function AlarmsScreen() {
 
   const updateAlarm = (alarmData: Omit<Alarm, 'id'>) => {
     if (!editingAlarm) return;
-    
+
     console.log('Updating alarm:', alarmData);
     const updatedAlarm: Alarm = {
       ...alarmData,
       id: editingAlarm.id,
     };
-    
+
     const newAlarms = alarms.map(alarm =>
       alarm.id === editingAlarm.id ? updatedAlarm : alarm
     );
     saveAlarms(newAlarms);
-    
+
     if (updatedAlarm.enabled) {
       scheduleAlarmNotification(updatedAlarm);
     } else {
       cancelNotification(updatedAlarm.id);
     }
-    
+
     // Fermer la modale et réinitialiser l'état
     setShowModal(false);
     setEditingAlarm(null);
@@ -207,10 +236,29 @@ export default function AlarmsScreen() {
   return (
     <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Horloge Dorée */}
-        <View style={styles.clockWrapper}>
-          <GoldenClock />
+        {/* Header avec bouton de sélection d'horloge */}
+        <View style={styles.headerRow}>
+          <View style={{ width: 36 }} />
+          <Text style={styles.pageTitle}>Accueil</Text>
+          <TouchableOpacity
+            style={styles.clockSelectorButton}
+            onPress={() => setShowClockSelector(true)}
+          >
+            <Settings2 size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
+
+        {/* Affichage de l'horloge sélectionnée ou heure digitale par défaut */}
+        {selectedClock !== 'digital' ? (
+          <View style={styles.selectedClockContainer}>
+            {renderSelectedClock()}
+          </View>
+        ) : (
+          <View style={styles.header}>
+            <Text style={styles.currentTime}>{formatTime(currentTime)}</Text>
+            <Text style={styles.currentDate}>{formatDate(currentTime)}</Text>
+          </View>
+        )}
 
         {/* Widget Météo */}
         <WeatherWidget />
@@ -302,6 +350,14 @@ export default function AlarmsScreen() {
         />
       </Modal>
 
+      {/* Modal de sélection d'horloge */}
+      <ClockSelector
+        visible={showClockSelector}
+        onClose={() => setShowClockSelector(false)}
+        selectedClock={selectedClock}
+        onSelect={setSelectedClock}
+      />
+
       {/* Alerte d'alarme déclenchée */}
       <CustomAlert
         visible={showAlarmAlert}
@@ -324,10 +380,51 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 20,
   },
-  clockWrapper: {
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  clockSelectorButton: {
+    backgroundColor: 'rgba(139, 92, 246, 0.3)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#8b5cf6',
+  },
+  selectedClockContainer: {
+    marginHorizontal: 10,
+    marginBottom: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  header: {
     alignItems: 'center',
     marginBottom: 20,
     marginTop: 10,
+  },
+  currentTime: {
+    fontSize: 48,
+    fontWeight: '200',
+    color: '#fff',
+    letterSpacing: -2,
+  },
+  currentDate: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginTop: 8,
+    textTransform: 'capitalize',
   },
   section: {
     paddingHorizontal: 20,
