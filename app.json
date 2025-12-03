@@ -8,9 +8,17 @@
     "scheme": "modernclock",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.modernclock.app"
+      "bundleIdentifier": "com.modernclock.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Cette application utilise la synthèse vocale pour les notifications d'alarme."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +33,9 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.WRITE_SETTINGS",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "versionCode": 1
     },
@@ -55,7 +65,9 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Cette application utilise votre localisation pour afficher la météo locale."
         }
-      ]
+      ],
+      "expo-av",
+      "expo-document-picker"
     ],
     "experiments": {
       "typedRoutes": true
