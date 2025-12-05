@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingTop: 20,
+    paddingTop: 60,
   },
   headerRow: {
     flexDirection: 'row',

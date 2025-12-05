@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
   useSharedValue,
-  interpolate,
   Easing,
 } from 'react-native-reanimated';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface FluidClockProps {
   showSeconds?: boolean;
@@ -24,25 +21,29 @@ const FluidDigit = ({ value, isChanging }: DigitProps) => {
   const translateY = useSharedValue(0);
   const opacity = useSharedValue(1);
   const scale = useSharedValue(1);
-  const blur = useSharedValue(0);
+  const [displayValue, setDisplayValue] = useState(value);
 
   useEffect(() => {
     if (isChanging) {
-      // Exit animation
-      translateY.value = withTiming(-30, { duration: 300, easing: Easing.out(Easing.cubic) });
-      opacity.value = withTiming(0, { duration: 300 });
-      scale.value = withTiming(0.8, { duration: 300 });
+      // Exit animation - old value goes up
+      translateY.value = withTiming(-40, { duration: 250, easing: Easing.out(Easing.cubic) });
+      opacity.value = withTiming(0, { duration: 250 });
+      scale.value = withTiming(0.7, { duration: 250 });
 
-      // Enter animation after exit
+      // Après sortie, mettre le nouveau chiffre et le faire entrer
       setTimeout(() => {
-        translateY.value = 30;
+        setDisplayValue(value); // Le nouveau chiffre est déjà visible quand il monte
+        translateY.value = 40;
         opacity.value = 0;
-        scale.value = 0.8;
+        scale.value = 0.7;
 
-        translateY.value = withSpring(0, { damping: 15, stiffness: 150 });
-        opacity.value = withTiming(1, { duration: 400 });
-        scale.value = withSpring(1, { damping: 12, stiffness: 200 });
-      }, 300);
+        translateY.value = withSpring(0, { damping: 18, stiffness: 180 });
+        opacity.value = withTiming(1, { duration: 300 });
+        scale.value = withSpring(1, { damping: 15, stiffness: 200 });
+      }, 250);
+    } else {
+      // Pas de changement, juste mettre à jour la valeur
+      setDisplayValue(value);
     }
   }, [isChanging, value]);
 
@@ -57,7 +58,7 @@ const FluidDigit = ({ value, isChanging }: DigitProps) => {
   return (
     <View style={styles.digitContainer}>
       <Animated.View style={[styles.digitInner, animatedStyle]}>
-        <Text style={styles.digitText}>{value}</Text>
+        <Text style={styles.digitText}>{displayValue}</Text>
       </Animated.View>
     </View>
   );
@@ -142,10 +143,6 @@ export default function FluidClock({ showSeconds = true }: FluidClockProps) {
 
   return (
     <View style={styles.container}>
-      {/* Glow effect */}
-      <View style={styles.glowOuter} />
-      <View style={styles.glowInner} />
-
       {/* Clock display */}
       <View style={styles.clockWrapper}>
         <View style={styles.clockRow}>
@@ -174,39 +171,19 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
-    position: 'relative',
-  },
-  glowOuter: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(0, 245, 255, 0.1)',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -100 }, { translateY: -100 }],
-  },
-  glowInner: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(0, 245, 255, 0.15)',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -60 }, { translateY: -60 }],
+    paddingVertical: 30,
   },
   clockWrapper: {
-    backgroundColor: 'rgba(10, 21, 32, 0.9)',
+    backgroundColor: 'rgba(10, 21, 32, 0.95)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.3)',
-    padding: 20,
+    borderColor: 'rgba(0, 245, 255, 0.4)',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
     shadowColor: '#00f5ff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
-    shadowRadius: 20,
+    shadowRadius: 15,
     elevation: 10,
   },
   clockRow: {
@@ -215,12 +192,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   digitContainer: {
-    width: 45,
-    height: 65,
-    backgroundColor: 'rgba(0, 245, 255, 0.05)',
-    borderRadius: 8,
+    width: 38,
+    height: 55,
+    backgroundColor: 'rgba(0, 245, 255, 0.08)',
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(0, 245, 255, 0.15)',
+    borderColor: 'rgba(0, 245, 255, 0.2)',
     marginHorizontal: 2,
     overflow: 'hidden',
     justifyContent: 'center',
@@ -231,22 +208,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   digitText: {
-    fontSize: 42,
-    fontWeight: '200',
-    color: '#00f5ff',
-    textShadowColor: '#00f5ff',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 15,
-    fontVariant: ['tabular-nums'],
-  },
-  colon: {
     fontSize: 36,
     fontWeight: '300',
     color: '#00f5ff',
     textShadowColor: '#00f5ff',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
-    marginHorizontal: 4,
+    textShadowRadius: 12,
+    fontVariant: ['tabular-nums'],
+  },
+  colon: {
+    fontSize: 30,
+    fontWeight: '300',
+    color: '#00f5ff',
+    textShadowColor: '#00f5ff',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+    marginHorizontal: 3,
   },
   dateText: {
     marginTop: 20,

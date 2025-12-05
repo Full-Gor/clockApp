@@ -14,7 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export type ClockType = 'digital' | 'holographic' | 'fluid' | 'flap-dark' | 'flap-light';
+export type ClockType = 'digital' | 'holographic' | 'fluid' | 'flap-dark' | 'flap-light' | 'golden';
 
 interface ClockOption {
   id: ClockType;
@@ -65,6 +65,14 @@ const clockOptions: ClockOption[] = [
     icon: <Sun size={24} color="#1a1a1a" />,
     colors: ['#f5f5f5', '#e8e8e8'],
     preview: 'FLAP',
+  },
+  {
+    id: 'golden',
+    name: 'Dorée',
+    description: 'Horloge dorée animée élégante',
+    icon: <Moon size={24} color="#ffd700" />,
+    colors: ['#1a1a2e', '#0f0f1a'],
+    preview: 'GOLD',
   },
 ];
 
@@ -195,7 +203,7 @@ export function useClockSelection() {
   };
 
   const isValidClockType = (type: string): type is ClockType => {
-    return ['digital', 'holographic', 'fluid', 'flap-dark', 'flap-light'].includes(type);
+    return ['digital', 'holographic', 'fluid', 'flap-dark', 'flap-light', 'golden'].includes(type);
   };
 
   return { selectedClock, setSelectedClock, loading };
