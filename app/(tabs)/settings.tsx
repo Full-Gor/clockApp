@@ -147,65 +147,130 @@ export default function SettingsScreen() {
           <Text style={[styles.title, { color: textColor }]}>{t('settings')}</Text>
         </View>
 
-        {/* Dark Mode Toggle Section */}
-        <View style={[styles.card, { backgroundColor: cardBg }]}>
+        {/* Dark Mode Toggle Section - Large 3D Design */}
+        <View style={[styles.darkModeCard, { backgroundColor: cardBg }]}>
           <View style={styles.darkModeContainer}>
-            <View style={styles.darkModeIcons}>
-              <Animated.View style={[
-                styles.iconContainer,
-                !isDark && styles.iconActive,
-                { transform: [{ scale: !isDark ? sunGlowAnim : 1 }] }
+            {/* Large Sun Icon with Glow */}
+            <Animated.View style={[
+              styles.sunContainer,
+              { transform: [{ scale: !isDark ? sunGlowAnim : 1 }] }
+            ]}>
+              <View style={[
+                styles.sunGlowOuter,
+                !isDark && styles.sunGlowActive
               ]}>
-                <Text style={styles.iconText}>☀️</Text>
-              </Animated.View>
-
-              <TouchableOpacity
-                style={[
-                  styles.toggleTrack,
-                  { backgroundColor: isDark ? '#8b5cf6' : '#d1d5db' }
-                ]}
-                onPress={() => updateSetting('darkMode', !isDark)}
-                activeOpacity={0.8}
-              >
-                <Animated.View style={[
-                  styles.toggleThumb,
-                  {
-                    transform: [{ translateX: isDark ? 40 : 0 }],
-                    backgroundColor: '#fff',
-                  }
-                ]} />
-              </TouchableOpacity>
-
-              <View style={[styles.iconContainer, isDark && styles.iconActive]}>
-                <Text style={styles.iconText}>🌙</Text>
+                <View style={[
+                  styles.sunGlowMiddle,
+                  !isDark && styles.sunGlowMiddleActive
+                ]}>
+                  <LinearGradient
+                    colors={!isDark ? ['#ffd93d', '#ff9500'] : ['#4a4a5a', '#3a3a4a']}
+                    style={styles.sunIcon}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <View style={styles.sunGloss} />
+                    {/* Sun rays */}
+                    {!isDark && (
+                      <>
+                        <View style={[styles.sunRay, { transform: [{ rotate: '0deg' }] }]} />
+                        <View style={[styles.sunRay, { transform: [{ rotate: '45deg' }] }]} />
+                        <View style={[styles.sunRay, { transform: [{ rotate: '90deg' }] }]} />
+                        <View style={[styles.sunRay, { transform: [{ rotate: '135deg' }] }]} />
+                      </>
+                    )}
+                  </LinearGradient>
+                </View>
               </View>
-            </View>
+            </Animated.View>
 
+            {/* Large 3D Toggle with Moon Icon Inside */}
+            <TouchableOpacity
+              style={styles.toggle3DContainer}
+              onPress={() => updateSetting('darkMode', !isDark)}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={isDark ? ['#6b5ce7', '#8b5cf6', '#a78bfa'] : ['#c4c9d4', '#d1d5db', '#e5e7eb']}
+                style={styles.toggle3DTrack}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+              >
+                <View style={styles.toggle3DTrackGloss} />
+                <View style={styles.toggle3DInnerShadow} />
+
+                {/* 3D Thumb with Moon */}
+                <Animated.View style={[
+                  styles.toggle3DThumb,
+                  {
+                    transform: [{ translateX: isDark ? 60 : 0 }],
+                  }
+                ]}>
+                  <LinearGradient
+                    colors={['#ffffff', '#f0f0f5', '#e8e8ed']}
+                    style={styles.toggle3DThumbGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                  >
+                    <View style={styles.toggle3DThumbGloss} />
+                    {/* Moon Icon Inside Thumb */}
+                    <View style={[
+                      styles.moonInThumb,
+                      isDark && styles.moonInThumbActive
+                    ]}>
+                      <View style={styles.moonCrescent} />
+                    </View>
+                  </LinearGradient>
+                </Animated.View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Dark Mode / OFF Labels */}
             <View style={styles.darkModeLabels}>
               <TouchableOpacity
                 style={[
-                  styles.modeButton,
-                  !isDark && styles.modeButtonActive,
-                  { backgroundColor: !isDark ? 'rgba(139,92,246,0.2)' : 'transparent' }
+                  styles.modeButton3D,
+                  !isDark && styles.modeButton3DActive,
                 ]}
                 onPress={() => updateSetting('darkMode', false)}
               >
-                <Text style={[styles.modeButtonText, { color: !isDark ? '#8b5cf6' : subtextColor }]}>
-                  Light Mode
-                </Text>
+                <LinearGradient
+                  colors={!isDark ? ['#8b5cf6', '#7c3aed'] : [cardBg, cardBg]}
+                  style={styles.modeButton3DGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.modeButton3DGloss} />
+                  <Text style={[
+                    styles.modeButton3DText,
+                    { color: !isDark ? '#fff' : subtextColor }
+                  ]}>
+                    Dark Mode
+                  </Text>
+                </LinearGradient>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.modeButton,
-                  isDark && styles.modeButtonActive,
-                  { backgroundColor: isDark ? 'rgba(139,92,246,0.2)' : 'transparent' }
+                  styles.modeButton3D,
+                  isDark && styles.modeButton3DActive,
                 ]}
                 onPress={() => updateSetting('darkMode', true)}
               >
-                <Text style={[styles.modeButtonText, { color: isDark ? '#8b5cf6' : subtextColor }]}>
-                  OFF
-                </Text>
+                <LinearGradient
+                  colors={isDark ? ['#8b5cf6', '#7c3aed'] : [cardBg, cardBg]}
+                  style={styles.modeButton3DGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.modeButton3DGloss} />
+                  <Text style={[
+                    styles.modeButton3DText,
+                    { color: isDark ? '#fff' : subtextColor }
+                  ]}>
+                    OFF
+                  </Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </View>
@@ -463,69 +528,211 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  // Dark Mode Toggle
+  // Dark Mode Toggle - Large 3D Design
+  darkModeCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    borderRadius: 24,
+    padding: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
   darkModeContainer: {
     alignItems: 'center',
   },
-  darkModeIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+  sunContainer: {
+    marginBottom: 30,
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  sunGlowOuter: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'transparent',
   },
-  iconActive: {
-    backgroundColor: 'rgba(139,92,246,0.3)',
+  sunGlowActive: {
+    backgroundColor: 'rgba(255, 217, 61, 0.15)',
+    shadowColor: '#ffd93d',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 30,
+  },
+  sunGlowMiddle: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  sunGlowMiddleActive: {
+    backgroundColor: 'rgba(255, 217, 61, 0.25)',
+    shadowColor: '#ff9500',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+  },
+  sunIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#ff9500',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  sunGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '45%',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+  },
+  sunRay: {
+    position: 'absolute',
+    width: 100,
+    height: 4,
+    backgroundColor: 'rgba(255, 217, 61, 0.3)',
+    borderRadius: 2,
+  },
+  toggle3DContainer: {
+    marginBottom: 24,
+  },
+  toggle3DTrack: {
+    width: 130,
+    height: 60,
+    borderRadius: 30,
+    padding: 5,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  toggle3DTrackGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '40%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+  },
+  toggle3DInnerShadow: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    right: 4,
+    bottom: 4,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  toggle3DThumb: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    zIndex: 10,
+  },
+  toggle3DThumbGradient: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  toggle3DThumbGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '45%',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+  },
+  moonInThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#c4c9d4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  moonInThumbActive: {
+    backgroundColor: '#6b5ce7',
     shadowColor: '#8b5cf6',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
-    shadowRadius: 10,
+    shadowRadius: 8,
   },
-  iconText: {
-    fontSize: 24,
-  },
-  toggleTrack: {
-    width: 80,
-    height: 40,
-    borderRadius: 20,
-    marginHorizontal: 16,
-    padding: 4,
-    justifyContent: 'center',
-  },
-  toggleThumb: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+  moonCrescent: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f5',
   },
   darkModeLabels: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 16,
   },
-  modeButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
+  modeButton3D: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  modeButtonActive: {
-    borderWidth: 1,
-    borderColor: 'rgba(139,92,246,0.3)',
+  modeButton3DActive: {
+    shadowColor: '#8b5cf6',
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
   },
-  modeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+  modeButton3DGradient: {
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  modeButton3DGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  modeButton3DText: {
+    fontSize: 16,
+    fontWeight: '700',
   },
 
   // Category Pills
