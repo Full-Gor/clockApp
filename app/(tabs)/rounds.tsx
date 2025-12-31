@@ -6,11 +6,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, RotateCcw, Settings, SkipForward, Volume2, VolumeX } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { soundManager } from '@/services/soundService';
 import { CustomAlert } from '@/components/CustomAlert';
 
@@ -19,10 +21,10 @@ type Phase = 'prepare' | 'round' | 'rest' | 'finished';
 export default function RoundsScreen() {
   // Configuration
   const [rounds, setRounds] = useState(3);
-  const [roundDuration, setRoundDuration] = useState(180); // 3 minutes en secondes
-  const [restDuration, setRestDuration] = useState(60); // 1 minute
-  const [prepareDuration, setPrepareDuration] = useState(10); // 10 secondes
-  const [warningTime, setWarningTime] = useState(10); // Alerte 10s avant la fin
+  const [roundDuration, setRoundDuration] = useState(180);
+  const [restDuration, setRestDuration] = useState(60);
+  const [prepareDuration, setPrepareDuration] = useState(10);
+  const [warningTime, setWarningTime] = useState(10);
 
   // État du timer
   const [isRunning, setIsRunning] = useState(false);
@@ -33,18 +35,63 @@ export default function RoundsScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [hasPlayedWarning, setHasPlayedWarning] = useState(false);
   const [showCompletionAlert, setShowCompletionAlert] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const endTimeRef = useRef<number>(0);
+  const scaleAnimation = useRef(new Animated.Value(1)).current;
+  const pulseAnimation = useRef(new Animated.Value(1)).current;
+
+  // Theme colors
+  const theme = {
+    bg: darkMode ? ['#1a1a2e', '#16213e'] : ['#e8eef3', '#d4dde6'],
+    cardBg: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.9)',
+    text: darkMode ? '#fff' : '#1a1a2e',
+    subtext: darkMode ? '#9ca3af' : '#6b7280',
+    shadowDark: darkMode ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.15)',
+  };
+
+  useEffect(() => {
+    loadDarkMode();
+  }, []);
+
+  const loadDarkMode = async () => {
+    try {
+      const settings = await AsyncStorage.getItem('app_settings');
+      if (settings) {
+        const parsed = JSON.parse(settings);
+        setDarkMode(parsed.darkMode ?? true);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du mode:', error);
+    }
+  };
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
       endTimeRef.current = Date.now() + (timeLeft * 1000);
 
+      // Pulse animation during running
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnimation, {
+            toValue: 1.05,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnimation, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
       intervalRef.current = setInterval(() => {
         const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
 
-        // Alerte avant la fin du round
         if (remaining === warningTime && (phase === 'round' || phase === 'rest') && !hasPlayedWarning) {
           playSound('warning');
           setHasPlayedWarning(true);
@@ -64,6 +111,7 @@ export default function RoundsScreen() {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      pulseAnimation.setValue(1);
     }
 
     return () => {
@@ -78,26 +126,21 @@ export default function RoundsScreen() {
     setHasPlayedWarning(false);
 
     if (phase === 'prepare') {
-      // Fin de la préparation, début du premier round
       playSound('bell');
       setPhase('round');
       setTimeLeft(roundDuration);
     } else if (phase === 'round') {
-      // Fin du round
       playSound('bell');
 
       if (currentRound >= rounds) {
-        // Fin de tous les rounds
         setPhase('finished');
         setIsRunning(false);
         showCompletionMessage();
       } else {
-        // Passer au repos
         setPhase('rest');
         setTimeLeft(restDuration);
       }
     } else if (phase === 'rest') {
-      // Fin du repos, round suivant
       playSound('bell');
       setCurrentRound(prev => prev + 1);
       setPhase('round');
@@ -132,6 +175,18 @@ export default function RoundsScreen() {
 
   const handleStartPause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Animated.sequence([
+      Animated.timing(scaleAnimation, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnimation, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
     setIsRunning(!isRunning);
   };
 
@@ -164,31 +219,31 @@ export default function RoundsScreen() {
 
   const getPhaseColor = () => {
     switch (phase) {
-      case 'prepare':
-        return '#f59e0b'; // Orange
-      case 'round':
-        return '#ef4444'; // Rouge
-      case 'rest':
-        return '#10b981'; // Vert
-      case 'finished':
-        return '#8b5cf6'; // Violet
-      default:
-        return '#8b5cf6';
+      case 'prepare': return '#f59e0b';
+      case 'round': return '#ef4444';
+      case 'rest': return '#10b981';
+      case 'finished': return '#8b5cf6';
+      default: return '#8b5cf6';
+    }
+  };
+
+  const getPhaseGradient = (): [string, string] => {
+    switch (phase) {
+      case 'prepare': return ['#f59e0b', '#d97706'];
+      case 'round': return ['#ef4444', '#dc2626'];
+      case 'rest': return ['#10b981', '#059669'];
+      case 'finished': return ['#8b5cf6', '#7c3aed'];
+      default: return ['#8b5cf6', '#7c3aed'];
     }
   };
 
   const getPhaseLabel = () => {
     switch (phase) {
-      case 'prepare':
-        return 'PRÉPARATION';
-      case 'round':
-        return 'ROUND';
-      case 'rest':
-        return 'REPOS';
-      case 'finished':
-        return 'TERMINÉ';
-      default:
-        return '';
+      case 'prepare': return 'PRÉPARATION';
+      case 'round': return 'ROUND';
+      case 'rest': return 'REPOS';
+      case 'finished': return 'TERMINÉ';
+      default: return '';
     }
   };
 
@@ -209,116 +264,190 @@ export default function RoundsScreen() {
   };
 
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
+    <LinearGradient colors={theme.bg as [string, string]} style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Timer de Rounds</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Timer de Rounds</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={styles.headerButton}
+              style={[styles.headerButton, { backgroundColor: theme.cardBg }]}
               onPress={() => setIsMuted(!isMuted)}
             >
               {isMuted ? (
-                <VolumeX size={20} color="#9ca3af" />
+                <VolumeX size={20} color={theme.subtext} />
               ) : (
                 <Volume2 size={20} color="#8b5cf6" />
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.headerButton}
+              style={[styles.headerButton, { backgroundColor: theme.cardBg }]}
               onPress={() => setShowSettings(true)}
               disabled={isRunning}
             >
-              <Settings size={20} color={isRunning ? '#6b7280' : '#8b5cf6'} />
+              <Settings size={20} color={isRunning ? theme.subtext : '#8b5cf6'} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Indicateur de round */}
-        <View style={styles.roundIndicator}>
-          <Text style={styles.roundText}>
-            ROUND {currentRound} / {rounds}
-          </Text>
+        {/* Round Indicator - Neumorphic Pills */}
+        <View style={styles.roundIndicatorContainer}>
+          {Array.from({ length: rounds }).map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.roundDot,
+                {
+                  backgroundColor: index + 1 < currentRound ? getPhaseColor() :
+                                   index + 1 === currentRound ? getPhaseColor() :
+                                   darkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+                  opacity: index + 1 <= currentRound ? 1 : 0.5,
+                  transform: [{ scale: index + 1 === currentRound ? 1.3 : 1 }],
+                }
+              ]}
+            />
+          ))}
         </View>
 
-        {/* Cercle de progression */}
+        <Text style={[styles.roundText, { color: getPhaseColor() }]}>
+          ROUND {currentRound} / {rounds}
+        </Text>
+
+        {/* Progress Circle - Neumorphic 3D */}
         <View style={styles.circleContainer}>
-          <View style={[styles.progressCircle, { borderColor: getPhaseColor() }]}>
-            <View style={[styles.progressBar, {
-              transform: [{ rotate: `${getProgress() * 360}deg` }],
-              borderTopColor: getPhaseColor(),
-              borderRightColor: getPhaseColor(),
-            }]} />
-            <View style={styles.innerCircle}>
-              <Text style={[styles.phaseLabel, { color: getPhaseColor() }]}>
-                {getPhaseLabel()}
-              </Text>
-              <Text style={styles.timeText}>{formatTime(timeLeft)}</Text>
-              {phase === 'round' && (
-                <Text style={styles.phaseSubtext}>Temps de travail</Text>
-              )}
-              {phase === 'rest' && (
-                <Text style={styles.phaseSubtext}>Temps de repos</Text>
-              )}
-              {phase === 'prepare' && (
-                <Text style={styles.phaseSubtext}>Préparez-vous...</Text>
-              )}
+          <Animated.View style={[
+            styles.progressCircleOuter,
+            {
+              backgroundColor: theme.cardBg,
+              borderColor: `${getPhaseColor()}40`,
+              transform: [{ scale: pulseAnimation }],
+            }
+          ]}>
+            {/* Progress Ring */}
+            <View style={styles.progressRing}>
+              <View style={[
+                styles.progressTrack,
+                { borderColor: `${getPhaseColor()}30` }
+              ]} />
             </View>
-          </View>
+
+            {/* Inner Circle */}
+            <View style={[styles.innerCircle, { backgroundColor: theme.cardBg }]}>
+              <View style={styles.glossOverlay} />
+
+              <LinearGradient
+                colors={getPhaseGradient()}
+                style={styles.phaseBadge}
+              >
+                <View style={styles.phaseBadgeGloss} />
+                <Text style={styles.phaseLabel}>{getPhaseLabel()}</Text>
+              </LinearGradient>
+
+              <Text style={[styles.timeText, { color: theme.text }]}>
+                {formatTime(timeLeft)}
+              </Text>
+
+              <Text style={[styles.phaseSubtext, { color: theme.subtext }]}>
+                {phase === 'round' && 'Temps de travail'}
+                {phase === 'rest' && 'Temps de repos'}
+                {phase === 'prepare' && 'Préparez-vous...'}
+                {phase === 'finished' && 'Bravo !'}
+              </Text>
+            </View>
+          </Animated.View>
         </View>
 
-        {/* Boutons de contrôle */}
+        {/* Control Buttons */}
         <View style={styles.controlsContainer}>
           <TouchableOpacity
-            style={[styles.controlButton, styles.resetButton]}
+            style={[
+              styles.controlButton,
+              {
+                backgroundColor: theme.cardBg,
+                borderColor: '#ef4444',
+              }
+            ]}
             onPress={handleReset}
+            activeOpacity={0.7}
           >
-            <RotateCcw size={24} color="#ef4444" />
+            <LinearGradient
+              colors={['rgba(239,68,68,0.2)', 'rgba(239,68,68,0.1)']}
+              style={styles.buttonGradient}
+            >
+              <RotateCcw size={24} color="#ef4444" />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.mainButton, isRunning ? styles.pauseButton : styles.playButton]}
-            onPress={handleStartPause}
-            disabled={phase === 'finished'}
-          >
-            {isRunning ? (
-              <Pause size={36} color="#fff" />
-            ) : (
-              <Play size={36} color="#fff" />
-            )}
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: scaleAnimation }] }}>
+            <TouchableOpacity
+              style={styles.mainButtonContainer}
+              onPress={handleStartPause}
+              disabled={phase === 'finished'}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={isRunning
+                  ? ['#f59e0b', '#d97706']
+                  : ['#10b981', '#059669']}
+                style={styles.mainButton}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.mainButtonGloss} />
+                {isRunning ? (
+                  <Pause size={36} color="#fff" />
+                ) : (
+                  <Play size={36} color="#fff" style={{ marginLeft: 4 }} />
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
 
           <TouchableOpacity
-            style={[styles.controlButton, styles.skipButton]}
+            style={[
+              styles.controlButton,
+              {
+                backgroundColor: theme.cardBg,
+                borderColor: (!isRunning && phase !== 'prepare') ? 'rgba(107,114,128,0.3)' : '#8b5cf6',
+              }
+            ]}
             onPress={handleSkip}
             disabled={!isRunning && phase !== 'prepare'}
+            activeOpacity={0.7}
           >
-            <SkipForward size={24} color={(!isRunning && phase !== 'prepare') ? '#6b7280' : '#8b5cf6'} />
+            <LinearGradient
+              colors={(!isRunning && phase !== 'prepare')
+                ? ['rgba(107,114,128,0.1)', 'rgba(107,114,128,0.05)']
+                : ['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.1)']}
+              style={styles.buttonGradient}
+            >
+              <SkipForward size={24} color={(!isRunning && phase !== 'prepare') ? '#6b7280' : '#8b5cf6'} />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        {/* Configuration rapide */}
+        {/* Quick Config - Neumorphic Card */}
         {!isRunning && phase === 'prepare' && currentRound === 1 && (
-          <View style={styles.quickConfig}>
-            <Text style={styles.quickConfigTitle}>Configuration actuelle</Text>
+          <View style={[styles.quickConfig, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.quickConfigTitle, { color: theme.text }]}>
+              Configuration actuelle
+            </Text>
             <View style={styles.configGrid}>
-              <View style={styles.configItem}>
-                <Text style={styles.configValue}>{rounds}</Text>
-                <Text style={styles.configLabel}>Rounds</Text>
-              </View>
-              <View style={styles.configItem}>
-                <Text style={styles.configValue}>{formatTime(roundDuration)}</Text>
-                <Text style={styles.configLabel}>Round</Text>
-              </View>
-              <View style={styles.configItem}>
-                <Text style={styles.configValue}>{formatTime(restDuration)}</Text>
-                <Text style={styles.configLabel}>Repos</Text>
-              </View>
-              <View style={styles.configItem}>
-                <Text style={styles.configValue}>{prepareDuration}s</Text>
-                <Text style={styles.configLabel}>Préparation</Text>
-              </View>
+              {[
+                { value: rounds, label: 'Rounds', color: '#8b5cf6' },
+                { value: formatTime(roundDuration), label: 'Round', color: '#ef4444' },
+                { value: formatTime(restDuration), label: 'Repos', color: '#10b981' },
+                { value: `${prepareDuration}s`, label: 'Préparation', color: '#f59e0b' },
+              ].map((item, index) => (
+                <View key={index} style={styles.configItem}>
+                  <Text style={[styles.configValue, { color: item.color }]}>
+                    {item.value}
+                  </Text>
+                  <Text style={[styles.configLabel, { color: theme.subtext }]}>
+                    {item.label}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -330,30 +459,36 @@ export default function RoundsScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.modalContainer}>
+        <LinearGradient colors={theme.bg as [string, string]} style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowSettings(false)}>
               <Text style={styles.modalCancelButton}>Fermer</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Configuration</Text>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Configuration</Text>
             <View style={{ width: 60 }} />
           </View>
 
           <ScrollView style={styles.modalContent}>
             {/* Préréglages */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Préréglages</Text>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Préréglages</Text>
               <View style={styles.presetsGrid}>
                 {presets.map((preset, index) => (
                   <TouchableOpacity
                     key={index}
-                    style={styles.presetCard}
                     onPress={() => applyPreset(preset)}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.presetLabel}>{preset.label}</Text>
-                    <Text style={styles.presetDetails}>
-                      {preset.rounds} rounds × {formatTime(preset.round)}
-                    </Text>
+                    <LinearGradient
+                      colors={['rgba(139,92,246,0.15)', 'rgba(139,92,246,0.05)']}
+                      style={[styles.presetCard, { borderColor: 'rgba(139,92,246,0.3)' }]}
+                    >
+                      <View style={styles.presetGloss} />
+                      <Text style={[styles.presetLabel, { color: theme.text }]}>{preset.label}</Text>
+                      <Text style={[styles.presetDetails, { color: theme.subtext }]}>
+                        {preset.rounds} rounds × {formatTime(preset.round)}
+                      </Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -361,83 +496,39 @@ export default function RoundsScreen() {
 
             {/* Configuration personnalisée */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Configuration personnalisée</Text>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                Configuration personnalisée
+              </Text>
 
-              <View style={styles.configRow}>
-                <Text style={styles.configRowLabel}>Nombre de rounds</Text>
-                <View style={styles.configRowControls}>
-                  <TouchableOpacity
-                    style={styles.configButton}
-                    onPress={() => setRounds(Math.max(1, rounds - 1))}
-                  >
-                    <Text style={styles.configButtonText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.configRowValue}>{rounds}</Text>
-                  <TouchableOpacity
-                    style={styles.configButton}
-                    onPress={() => setRounds(Math.min(99, rounds + 1))}
-                  >
-                    <Text style={styles.configButtonText}>+</Text>
-                  </TouchableOpacity>
+              {[
+                { label: 'Nombre de rounds', value: rounds, setValue: setRounds, min: 1, max: 99, step: 1, format: (v: number) => v.toString() },
+                { label: 'Durée du round', value: roundDuration, setValue: setRoundDuration, min: 10, max: 3600, step: 10, format: formatTime },
+                { label: 'Durée du repos', value: restDuration, setValue: setRestDuration, min: 5, max: 600, step: 5, format: formatTime },
+                { label: 'Préparation', value: prepareDuration, setValue: setPrepareDuration, min: 3, max: 60, step: 1, format: (v: number) => `${v}s` },
+              ].map((config, index) => (
+                <View key={index} style={[styles.configRow, { backgroundColor: theme.cardBg }]}>
+                  <Text style={[styles.configRowLabel, { color: theme.text }]}>
+                    {config.label}
+                  </Text>
+                  <View style={styles.configRowControls}>
+                    <TouchableOpacity
+                      style={styles.configButton}
+                      onPress={() => config.setValue(Math.max(config.min, config.value - config.step))}
+                    >
+                      <Text style={styles.configButtonText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.configRowValue, { color: theme.text }]}>
+                      {config.format(config.value)}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.configButton}
+                      onPress={() => config.setValue(Math.min(config.max, config.value + config.step))}
+                    >
+                      <Text style={styles.configButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-
-              <View style={styles.configRow}>
-                <Text style={styles.configRowLabel}>Durée du round</Text>
-                <View style={styles.configRowControls}>
-                  <TouchableOpacity
-                    style={styles.configButton}
-                    onPress={() => setRoundDuration(Math.max(10, roundDuration - 10))}
-                  >
-                    <Text style={styles.configButtonText}>-10s</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.configRowValue}>{formatTime(roundDuration)}</Text>
-                  <TouchableOpacity
-                    style={styles.configButton}
-                    onPress={() => setRoundDuration(Math.min(3600, roundDuration + 10))}
-                  >
-                    <Text style={styles.configButtonText}>+10s</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.configRow}>
-                <Text style={styles.configRowLabel}>Durée du repos</Text>
-                <View style={styles.configRowControls}>
-                  <TouchableOpacity
-                    style={styles.configButton}
-                    onPress={() => setRestDuration(Math.max(5, restDuration - 5))}
-                  >
-                    <Text style={styles.configButtonText}>-5s</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.configRowValue}>{formatTime(restDuration)}</Text>
-                  <TouchableOpacity
-                    style={styles.configButton}
-                    onPress={() => setRestDuration(Math.min(600, restDuration + 5))}
-                  >
-                    <Text style={styles.configButtonText}>+5s</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.configRow}>
-                <Text style={styles.configRowLabel}>Préparation</Text>
-                <View style={styles.configRowControls}>
-                  <TouchableOpacity
-                    style={styles.configButton}
-                    onPress={() => setPrepareDuration(Math.max(3, prepareDuration - 1))}
-                  >
-                    <Text style={styles.configButtonText}>-1s</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.configRowValue}>{prepareDuration}s</Text>
-                  <TouchableOpacity
-                    style={styles.configButton}
-                    onPress={() => setPrepareDuration(Math.min(60, prepareDuration + 1))}
-                  >
-                    <Text style={styles.configButtonText}>+1s</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              ))}
 
               <TouchableOpacity
                 style={styles.applyButton}
@@ -445,15 +536,21 @@ export default function RoundsScreen() {
                   handleReset();
                   setShowSettings(false);
                 }}
+                activeOpacity={0.8}
               >
-                <Text style={styles.applyButtonText}>Appliquer et réinitialiser</Text>
+                <LinearGradient
+                  colors={['#8b5cf6', '#7c3aed']}
+                  style={styles.applyButtonGradient}
+                >
+                  <View style={styles.applyButtonGloss} />
+                  <Text style={styles.applyButtonText}>Appliquer et réinitialiser</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </ScrollView>
         </LinearGradient>
       </Modal>
 
-      {/* Alerte de fin d'entraînement */}
       <CustomAlert
         visible={showCompletionAlert}
         title="Entraînement terminé !"
@@ -488,78 +585,133 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
   },
   headerActions: {
     flexDirection: 'row',
     gap: 12,
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  roundIndicator: {
+
+  // Round Indicator
+  roundIndicatorContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: 10,
+  },
+  roundDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   roundText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#8b5cf6',
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
     letterSpacing: 2,
+    marginBottom: 20,
   },
+
+  // Progress Circle
   circleContainer: {
     alignItems: 'center',
     marginBottom: 40,
   },
-  progressCircle: {
+  progressCircleOuter: {
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
     borderWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  progressBar: {
+  progressRing: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+  },
+  progressTrack: {
     position: 'absolute',
     width: '100%',
     height: '100%',
-    borderRadius: 150,
+    borderRadius: 140,
     borderWidth: 8,
-    borderBottomColor: 'transparent',
-    borderLeftColor: 'transparent',
   },
   innerCircle: {
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    width: 250,
+    height: 250,
+    borderRadius: 125,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  glossOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderTopLeftRadius: 125,
+    borderTopRightRadius: 125,
+  },
+  phaseBadge: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  phaseBadgeGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   phaseLabel: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '800',
+    color: '#fff',
     letterSpacing: 2,
-    marginBottom: 8,
   },
   timeText: {
     fontSize: 56,
     fontWeight: '300',
-    color: '#fff',
     letterSpacing: -2,
   },
   phaseSubtext: {
     fontSize: 14,
-    color: '#9ca3af',
     marginTop: 8,
   },
+
+  // Control Buttons
   controlsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -569,70 +721,82 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   controlButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
     width: 60,
     height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  resetButton: {
+    borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#ef4444',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: 'hidden',
   },
-  skipButton: {
-    borderWidth: 2,
-    borderColor: '#8b5cf6',
+  buttonGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainButtonContainer: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
   },
   mainButton: {
     width: 90,
     height: 90,
-    borderRadius: 45,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
+    overflow: 'hidden',
+  },
+  mainButtonGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '45%',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+  },
+
+  // Quick Config
+  quickConfig: {
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 30,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  playButton: {
-    backgroundColor: '#10b981',
-  },
-  pauseButton: {
-    backgroundColor: '#f59e0b',
-  },
-  quickConfig: {
-    paddingHorizontal: 20,
-    marginBottom: 30,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   quickConfigTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
     marginBottom: 16,
     textAlign: 'center',
   },
   configGrid: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 20,
   },
   configItem: {
     alignItems: 'center',
   },
   configValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#8b5cf6',
     marginBottom: 4,
   },
   configLabel: {
     fontSize: 12,
-    color: '#9ca3af',
   },
+
   // Modal styles
   modalContainer: {
     flex: 1,
@@ -648,7 +812,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
   },
   modalCancelButton: {
     fontSize: 16,
@@ -664,41 +827,45 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
     marginBottom: 16,
   },
   presetsGrid: {
     gap: 12,
   },
   presetCard: {
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    overflow: 'hidden',
+  },
+  presetGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   presetLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
     marginBottom: 4,
   },
   presetDetails: {
     fontSize: 14,
-    color: '#9ca3af',
   },
   configRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
   },
   configRowLabel: {
     fontSize: 16,
-    color: '#fff',
     flex: 1,
   },
   configRowControls: {
@@ -707,33 +874,48 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   configButton: {
-    backgroundColor: 'rgba(139, 92, 246, 0.3)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: 'rgba(139,92,246,0.3)',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: '#8b5cf6',
-    minWidth: 60,
+    minWidth: 50,
     alignItems: 'center',
   },
   configButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#8b5cf6',
   },
   configRowValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
     minWidth: 60,
     textAlign: 'center',
   },
   applyButton: {
-    backgroundColor: '#8b5cf6',
-    borderRadius: 12,
+    marginTop: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  applyButtonGradient: {
     padding: 16,
     alignItems: 'center',
-    marginTop: 20,
+    overflow: 'hidden',
+  },
+  applyButtonGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   applyButtonText: {
     fontSize: 16,

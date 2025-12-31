@@ -9,7 +9,7 @@ import {
   TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Plus, MapPin, Clock, Settings2 } from 'lucide-react-native';
+import { Plus, MapPin, Settings2, X } from 'lucide-react-native';
 import moment from 'moment-timezone';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -18,7 +18,6 @@ import {
   FlapClock,
   ClockSelector,
   useClockSelection,
-  ClockType,
 } from '../../components/clocks';
 
 interface WorldClock {
@@ -52,7 +51,16 @@ export default function WorldClockScreen() {
   const [showModal, setShowModal] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [showClockSelector, setShowClockSelector] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
   const { selectedClock, setSelectedClock, loading: clockLoading } = useClockSelection();
+
+  // Theme colors
+  const theme = {
+    bg: darkMode ? ['#1a1a2e', '#16213e'] : ['#e8eef3', '#d4dde6'],
+    cardBg: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.9)',
+    text: darkMode ? '#fff' : '#1a1a2e',
+    subtext: darkMode ? '#9ca3af' : '#6b7280',
+  };
 
   // Render the selected clock component
   const renderSelectedClock = () => {
@@ -67,15 +75,28 @@ export default function WorldClockScreen() {
         return <FlapClock theme="light" />;
       case 'digital':
       default:
-        return null; // Will show the default world clocks list
+        return null;
     }
   };
 
   useEffect(() => {
     loadClocks();
+    loadDarkMode();
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const loadDarkMode = async () => {
+    try {
+      const settings = await AsyncStorage.getItem('app_settings');
+      if (settings) {
+        const parsed = JSON.parse(settings);
+        setDarkMode(parsed.darkMode ?? true);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du mode:', error);
+    }
+  };
 
   const loadClocks = async () => {
     try {
@@ -134,34 +155,48 @@ export default function WorldClockScreen() {
   );
 
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
+    <LinearGradient colors={theme.bg as [string, string]} style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Header - Neumorphic */}
         <View style={styles.header}>
-          <Text style={styles.title}>Horloge Mondiale</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Horloge Mondiale</Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity
-              style={styles.clockSelectorButton}
+              style={[styles.headerButton, { backgroundColor: theme.cardBg }]}
               onPress={() => setShowClockSelector(true)}
             >
-              <Settings2 size={20} color="#fff" />
+              <LinearGradient
+                colors={['rgba(139,92,246,0.3)', 'rgba(139,92,246,0.1)']}
+                style={styles.buttonGradient}
+              >
+                <Settings2 size={20} color="#8b5cf6" />
+              </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.addButton}
+              style={styles.addButtonContainer}
               onPress={() => setShowModal(true)}
+              activeOpacity={0.8}
             >
-              <Plus size={20} color="#fff" />
+              <LinearGradient
+                colors={['#8b5cf6', '#7c3aed']}
+                style={styles.addButton}
+              >
+                <View style={styles.addButtonGloss} />
+                <Plus size={20} color="#fff" />
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Render selected clock or default */}
+        {/* Render selected clock */}
         {selectedClock !== 'digital' && (
-          <View style={styles.selectedClockContainer}>
+          <View style={[styles.clockCard, { backgroundColor: theme.cardBg }]}>
+            <View style={styles.clockGloss} />
             {renderSelectedClock()}
           </View>
         )}
 
-        {/* World clocks list - only show when digital clock is selected */}
+        {/* World clocks list - Neumorphic Cards */}
         {selectedClock === 'digital' && (
           <View style={styles.clocksContainer}>
             {clocks.map((clock, index) => {
@@ -170,45 +205,92 @@ export default function WorldClockScreen() {
               const isToday = time.isSame(moment(), 'day');
               const dayText = isToday ? 'Aujourd\'hui' :
                              time.isAfter(moment(), 'day') ? 'Demain' : 'Hier';
+              const isPrimary = index === 0;
 
               return (
                 <TouchableOpacity
                   key={clock.id}
-                  style={[styles.clockItem, index === 0 && styles.firstClockItem]}
-                  onLongPress={() => index > 0 && removeClock(clock.id)}
+                  style={[
+                    styles.clockItem,
+                    isPrimary && styles.primaryClockItem,
+                  ]}
+                  onLongPress={() => !isPrimary && removeClock(clock.id)}
+                  activeOpacity={0.8}
                 >
                   <LinearGradient
-                    colors={index === 0 ? ['#8b5cf6', '#7c3aed'] : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']}
-                    style={styles.clockGradient}
+                    colors={isPrimary
+                      ? ['#8b5cf6', '#7c3aed']
+                      : [theme.cardBg, theme.cardBg]}
+                    style={styles.clockItemGradient}
                   >
+                    {/* Glossy overlay */}
+                    <View style={[styles.itemGloss, { opacity: isPrimary ? 0.2 : 0.05 }]} />
+
+                    {/* Remove button for non-primary */}
+                    {!isPrimary && (
+                      <TouchableOpacity
+                        style={styles.removeButton}
+                        onPress={() => removeClock(clock.id)}
+                      >
+                        <X size={14} color={theme.subtext} />
+                      </TouchableOpacity>
+                    )}
+
                     <View style={styles.clockHeader}>
                       <View style={styles.clockInfo}>
-                        <Text style={[styles.cityName, index === 0 && styles.primaryCity]}>
+                        <Text style={[
+                          styles.cityName,
+                          { color: isPrimary ? '#fff' : theme.text }
+                        ]}>
                           {clock.city}
                         </Text>
-                        <Text style={[styles.countryName, index === 0 && styles.primaryCountry]}>
+                        <Text style={[
+                          styles.countryName,
+                          { color: isPrimary ? 'rgba(255,255,255,0.8)' : theme.subtext }
+                        ]}>
                           {clock.country}
                         </Text>
                       </View>
-                      <View style={styles.timeInfo}>
-                        <Text style={[styles.timeDiff, index === 0 && styles.primaryTimeDiff]}>
+                      <View style={[
+                        styles.timeDiffBadge,
+                        { backgroundColor: isPrimary ? 'rgba(255,255,255,0.2)' : 'rgba(139,92,246,0.2)' }
+                      ]}>
+                        <Text style={[
+                          styles.timeDiff,
+                          { color: isPrimary ? '#fff' : '#8b5cf6' }
+                        ]}>
                           {timeDiff}
                         </Text>
                       </View>
                     </View>
 
                     <View style={styles.clockTime}>
-                      <Text style={[styles.time, index === 0 && styles.primaryTime]}>
+                      <Text style={[
+                        styles.time,
+                        isPrimary && styles.primaryTime,
+                        { color: isPrimary ? '#fff' : theme.text }
+                      ]}>
                         {time.format('HH:mm')}
                       </Text>
-                      <Text style={[styles.seconds, index === 0 && styles.primarySeconds]}>
+                      <Text style={[
+                        styles.seconds,
+                        { color: isPrimary ? 'rgba(255,255,255,0.7)' : theme.subtext }
+                      ]}>
                         {time.format('ss')}
                       </Text>
                     </View>
 
-                    <Text style={[styles.dayText, index === 0 && styles.primaryDayText]}>
-                      {dayText}
-                    </Text>
+                    <View style={[
+                      styles.dayBadge,
+                      { backgroundColor: isPrimary ? 'rgba(255,255,255,0.15)' : 'rgba(139,92,246,0.1)' }
+                    ]}>
+                      <Text style={[
+                        styles.dayText,
+                        { color: isPrimary ? '#fff' : '#8b5cf6' }
+                      ]}>
+                        {dayText}
+                      </Text>
+                    </View>
                   </LinearGradient>
                 </TouchableOpacity>
               );
@@ -225,45 +307,56 @@ export default function WorldClockScreen() {
         onSelect={setSelectedClock}
       />
 
+      {/* Add City Modal - Neumorphic */}
       <Modal
         visible={showModal}
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.modalContainer}>
+        <LinearGradient colors={theme.bg as [string, string]} style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowModal(false)}>
               <Text style={styles.cancelButton}>Annuler</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Ajouter une ville</Text>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Ajouter une ville</Text>
             <View style={{ width: 60 }} />
           </View>
 
-          <View style={styles.searchContainer}>
-            <MapPin size={20} color="#9ca3af" />
+          {/* Search - Neumorphic */}
+          <View style={[styles.searchContainer, { backgroundColor: theme.cardBg }]}>
+            <MapPin size={20} color={theme.subtext} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: theme.text }]}
               placeholder="Rechercher une ville..."
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={theme.subtext}
               value={searchText}
               onChangeText={setSearchText}
             />
           </View>
 
+          {/* Timezone List */}
           <ScrollView style={styles.timezoneList}>
             {filteredTimezones.map((timezone, index) => (
               <TouchableOpacity
                 key={index}
-                style={styles.timezoneItem}
+                style={[styles.timezoneItem, { backgroundColor: theme.cardBg }]}
                 onPress={() => addClock(timezone)}
+                activeOpacity={0.7}
               >
+                <View style={styles.itemGloss} />
                 <View style={styles.timezoneInfo}>
-                  <Text style={styles.timezoneName}>{timezone.city}</Text>
-                  <Text style={styles.timezoneCountry}>{timezone.country}</Text>
+                  <Text style={[styles.timezoneName, { color: theme.text }]}>
+                    {timezone.city}
+                  </Text>
+                  <Text style={[styles.timezoneCountry, { color: theme.subtext }]}>
+                    {timezone.country}
+                  </Text>
                 </View>
-                <Text style={styles.timezoneTime}>
-                  {getTimeInTimezone(timezone.timezone).format('HH:mm')}
-                </Text>
+                <View style={styles.timezoneTimeContainer}>
+                  <Text style={styles.timezoneTime}>
+                    {getTimeInTimezone(timezone.timezone).format('HH:mm')}
+                  </Text>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -291,51 +384,124 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
   },
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  clockSelectorButton: {
-    backgroundColor: 'rgba(139, 92, 246, 0.3)',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonGradient: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#8b5cf6',
+  },
+  addButtonContainer: {
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   addButton: {
-    backgroundColor: '#8b5cf6',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  selectedClockContainer: {
-    marginHorizontal: 10,
-    marginBottom: 20,
-    borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
+  addButtonGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+  },
+
+  // Clock Card
+  clockCard: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  clockGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '40%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    zIndex: 1,
+  },
+
+  // World Clocks List
   clocksContainer: {
     paddingHorizontal: 20,
   },
   clockItem: {
-    marginBottom: 16,
+    marginBottom: 12,
     borderRadius: 20,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  firstClockItem: {
-    marginBottom: 24,
+  primaryClockItem: {
+    marginBottom: 20,
+    shadowColor: '#8b5cf6',
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
   },
-  clockGradient: {
+  clockItemGradient: {
     padding: 20,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  itemGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  removeButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   clockHeader: {
     flexDirection: 'row',
@@ -347,67 +513,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cityName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  primaryCity: {
     fontSize: 20,
     fontWeight: '700',
   },
   countryName: {
     fontSize: 14,
-    color: '#d1d5db',
     marginTop: 2,
   },
-  primaryCountry: {
-    color: '#e5e7eb',
-  },
-  timeInfo: {
-    alignItems: 'flex-end',
+  timeDiffBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
   timeDiff: {
     fontSize: 12,
-    color: '#9ca3af',
-    fontWeight: '500',
-  },
-  primaryTimeDiff: {
-    color: '#e5e7eb',
+    fontWeight: '700',
   },
   clockTime: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   time: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: '300',
-    color: '#fff',
-    letterSpacing: -1,
+    letterSpacing: -2,
   },
   primaryTime: {
-    fontSize: 42,
+    fontSize: 48,
     fontWeight: '200',
   },
   seconds: {
-    fontSize: 18,
-    fontWeight: '300',
-    color: '#d1d5db',
-    marginLeft: 4,
-  },
-  primarySeconds: {
     fontSize: 20,
-    color: '#e5e7eb',
+    fontWeight: '300',
+    marginLeft: 6,
+  },
+  dayBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   dayText: {
     fontSize: 12,
-    color: '#9ca3af',
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  primaryDayText: {
-    fontSize: 14,
-    color: '#e5e7eb',
-  },
+
+  // Modal
   modalContainer: {
     flex: 1,
     paddingTop: 60,
@@ -422,7 +574,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
   },
   cancelButton: {
     fontSize: 16,
@@ -431,18 +582,21 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
+    borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     marginHorizontal: 20,
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   searchInput: {
     flex: 1,
     marginLeft: 12,
     fontSize: 16,
-    color: '#fff',
   },
   timezoneList: {
     flex: 1,
@@ -452,26 +606,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 10,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   timezoneInfo: {
     flex: 1,
   },
   timezoneName: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#fff',
+    fontWeight: '600',
   },
   timezoneCountry: {
     fontSize: 14,
-    color: '#9ca3af',
     marginTop: 2,
+  },
+  timezoneTimeContainer: {
+    backgroundColor: 'rgba(139,92,246,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   timezoneTime: {
     fontSize: 16,
     color: '#8b5cf6',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

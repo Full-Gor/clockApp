@@ -7,6 +7,8 @@ import {
   ScrollView,
   Alert,
   Modal,
+  Animated,
+  Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Play, Pause, RotateCcw, Settings, Volume2, VolumeX, Bell, Upload } from 'lucide-react-native';
@@ -14,13 +16,14 @@ import * as Haptics from 'expo-haptics';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { soundManager, ALARM_SOUNDS } from '@/services/soundService';
 import { TimerPicker } from '@/components/TimerPicker';
 import { CustomAlert } from '@/components/CustomAlert';
 
 export default function TimerScreen() {
   const insets = useSafeAreaInsets();
-  const [initialTime, setInitialTime] = useState(60); // en secondes
+  const [initialTime, setInitialTime] = useState(60);
   const [timeLeft, setTimeLeft] = useState(60);
   const [isRunning, setIsRunning] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -29,12 +32,24 @@ export default function TimerScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [soundsRefreshKey, setSoundsRefreshKey] = useState(0);
   const [showCompletionAlert, setShowCompletionAlert] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const endTimeRef = useRef<number>(0);
   const timerNotificationId = useRef<string | null>(null);
+  const scaleAnimation = useRef(new Animated.Value(1)).current;
+  const progressAnimation = useRef(new Animated.Value(0)).current;
 
-  // Charger les sons personnalisés au montage du composant
+  // Theme colors
+  const theme = {
+    bg: darkMode ? ['#1a1a2e', '#16213e'] : ['#e8eef3', '#d4dde6'],
+    cardBg: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.9)',
+    text: darkMode ? '#fff' : '#1a1a2e',
+    subtext: darkMode ? '#9ca3af' : '#6b7280',
+    shadowDark: darkMode ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.15)',
+  };
+
   useEffect(() => {
+    loadDarkMode();
     const loadCustomSounds = async () => {
       await soundManager.initialize();
       await soundManager.loadCustomSounds();
@@ -43,7 +58,18 @@ export default function TimerScreen() {
     loadCustomSounds();
   }, []);
 
-  // Rafraîchir la liste des sons quand la modal s'ouvre
+  const loadDarkMode = async () => {
+    try {
+      const settings = await AsyncStorage.getItem('app_settings');
+      if (settings) {
+        const parsed = JSON.parse(settings);
+        setDarkMode(parsed.darkMode ?? true);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du mode:', error);
+    }
+  };
+
   useEffect(() => {
     if (showSoundPicker) {
       const refreshSounds = async () => {
@@ -54,30 +80,22 @@ export default function TimerScreen() {
     }
   }, [showSoundPicker]);
 
-  // Écouter les notifications du minuteur
   useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener(async notification => {
       if (notification.request.content.categoryIdentifier === 'timer') {
         const soundId = notification.request.content.data?.sound || 'classic';
-
-        // Jouer le son
         if (!isMuted) {
           await soundManager.playAlarmSound(soundId);
         }
-
-        // Afficher la modale
         setShowCompletionAlert(true);
       }
     });
-
     return () => subscription.remove();
   }, [isMuted]);
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
       endTimeRef.current = Date.now() + (timeLeft * 1000);
-
-      // Programmer une notification locale pour la fin du minuteur
       scheduleTimerNotification(timeLeft);
 
       intervalRef.current = setInterval(() => {
@@ -98,7 +116,6 @@ export default function TimerScreen() {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
-      // Annuler la notification si le minuteur est arrêté
       cancelTimerNotification();
     }
 
@@ -113,20 +130,15 @@ export default function TimerScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     if (!isMuted) {
-      // Jouer le son d'alarme
       try {
         await soundManager.playAlarmSound(selectedSound);
       } catch (error) {
         console.error('Erreur lors de la lecture du son:', error);
-        // Fallback sur les vibrations
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
     } else {
-      // Si muet, seulement les vibrations
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
-
-    // Afficher l'alerte personnalisée
     setShowCompletionAlert(true);
   };
 
@@ -137,23 +149,17 @@ export default function TimerScreen() {
 
   const scheduleTimerNotification = async (seconds: number) => {
     try {
-      // Annuler toute notification précédente
       await cancelTimerNotification();
 
-      // Programmer la nouvelle notification
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: '⏰ Minuteur terminé !',
           body: 'Votre minuteur est arrivé à terme.',
           sound: true,
           categoryIdentifier: 'timer',
-          data: {
-            sound: selectedSound,
-          },
+          data: { sound: selectedSound },
         },
-        trigger: {
-          seconds: seconds,
-        },
+        trigger: { seconds: seconds },
       });
 
       timerNotificationId.current = notificationId;
@@ -177,7 +183,7 @@ export default function TimerScreen() {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
@@ -190,6 +196,18 @@ export default function TimerScreen() {
 
   const handleStartPause = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Animated.sequence([
+      Animated.timing(scaleAnimation, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnimation, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
     setIsRunning(!isRunning);
   };
 
@@ -232,11 +250,6 @@ export default function TimerScreen() {
     }
   };
 
-  const getCurrentSoundName = () => {
-    const sound = ALARM_SOUNDS.find(s => s.id === selectedSound);
-    return sound ? sound.name : 'Classique';
-  };
-
   const handleAddCustomSound = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -247,12 +260,12 @@ export default function TimerScreen() {
       if (result.canceled) return;
 
       const file = result.assets[0];
-      const defaultName = file.name.replace(/\.[^/.]+$/, ''); // Nom du fichier sans extension
+      const defaultName = file.name.replace(/\.[^/.]+$/, '');
 
       try {
         const customSound = await soundManager.addCustomSound(defaultName, file.uri);
         setSelectedSound(customSound.id);
-        setSoundsRefreshKey(prev => prev + 1); // Rafraîchir la liste
+        setSoundsRefreshKey(prev => prev + 1);
         Alert.alert('Succès', `Le son "${defaultName}" a été ajouté avec succès !`);
       } catch (error) {
         console.error('Erreur lors de l\'ajout du son:', error);
@@ -264,25 +277,29 @@ export default function TimerScreen() {
     }
   };
 
+  const progress = getProgress();
+  const circumference = 2 * Math.PI * 130;
+  const strokeDashoffset = circumference * (1 - progress);
+
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
+    <LinearGradient colors={theme.bg as [string, string]} style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Minuteur</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Minuteur</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
-              style={styles.headerButton}
+              style={[styles.headerButton, { backgroundColor: theme.cardBg }]}
               onPress={() => setIsMuted(!isMuted)}
             >
               {isMuted ? (
-                <VolumeX size={20} color="#9ca3af" />
+                <VolumeX size={20} color={theme.subtext} />
               ) : (
                 <Volume2 size={20} color="#8b5cf6" />
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.headerButton}
+              style={[styles.headerButton, { backgroundColor: theme.cardBg }]}
               onPress={() => {
                 setShowSoundPicker(true);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -293,19 +310,37 @@ export default function TimerScreen() {
           </View>
         </View>
 
-        {/* Cercle de progression */}
+        {/* Progress Circle - Neumorphic 3D */}
         <View style={styles.circleContainer}>
-          <View style={styles.progressCircle}>
-            <View style={[styles.progressBar, {
-              transform: [{ rotate: `${getProgress() * 360}deg` }]
-            }]} />
-            <View style={styles.innerCircle}>
+          <View style={[styles.progressCircleOuter, { backgroundColor: theme.cardBg }]}>
+            {/* SVG-like progress ring using views */}
+            <View style={styles.progressRing}>
+              <View style={[
+                styles.progressTrack,
+                { borderColor: darkMode ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.1)' }
+              ]} />
+              <View style={[
+                styles.progressFill,
+                {
+                  borderColor: '#8b5cf6',
+                  transform: [{ rotate: `${progress * 360 - 90}deg` }],
+                }
+              ]} />
+            </View>
+
+            <View style={[styles.innerCircle, { backgroundColor: theme.cardBg }]}>
+              {/* Glossy overlay */}
+              <View style={styles.glossOverlay} />
+
               <TouchableOpacity
                 style={styles.timeDisplay}
                 onPress={() => !isRunning && setShowTimePicker(true)}
+                activeOpacity={0.7}
               >
-                <Text style={styles.timeText}>{formatTime(timeLeft)}</Text>
-                <Text style={styles.timeSubtext}>
+                <Text style={[styles.timeText, { color: theme.text }]}>
+                  {formatTime(timeLeft)}
+                </Text>
+                <Text style={[styles.timeSubtext, { color: theme.subtext }]}>
                   {isRunning ? 'En cours...' : 'Appuyez pour modifier'}
                 </Text>
               </TouchableOpacity>
@@ -313,57 +348,108 @@ export default function TimerScreen() {
           </View>
         </View>
 
-        {/* Boutons de contrôle */}
+        {/* Control Buttons */}
         <View style={styles.controlsContainer}>
           <TouchableOpacity
-            style={[styles.controlButton, styles.resetButton]}
+            style={[
+              styles.controlButton,
+              {
+                backgroundColor: theme.cardBg,
+                borderColor: timeLeft === initialTime && !isRunning ? 'rgba(107,114,128,0.3)' : '#ef4444',
+              }
+            ]}
             onPress={handleReset}
             disabled={timeLeft === initialTime && !isRunning}
+            activeOpacity={0.7}
           >
-            <RotateCcw size={24} color={timeLeft === initialTime && !isRunning ? '#6b7280' : '#ef4444'} />
+            <LinearGradient
+              colors={timeLeft === initialTime && !isRunning
+                ? ['rgba(107,114,128,0.1)', 'rgba(107,114,128,0.05)']
+                : ['rgba(239,68,68,0.2)', 'rgba(239,68,68,0.1)']}
+              style={styles.buttonGradient}
+            >
+              <RotateCcw size={24} color={timeLeft === initialTime && !isRunning ? '#6b7280' : '#ef4444'} />
+            </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.mainButton, isRunning ? styles.pauseButton : styles.playButton]}
-            onPress={handleStartPause}
-            disabled={timeLeft === 0}
-          >
-            {isRunning ? (
-              <Pause size={32} color="#fff" />
-            ) : (
-              <Play size={32} color="#fff" />
-            )}
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: scaleAnimation }] }}>
+            <TouchableOpacity
+              style={styles.mainButtonContainer}
+              onPress={handleStartPause}
+              disabled={timeLeft === 0}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={isRunning
+                  ? ['#f59e0b', '#d97706']
+                  : ['#10b981', '#059669']}
+                style={styles.mainButton}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.mainButtonGloss} />
+                {isRunning ? (
+                  <Pause size={32} color="#fff" />
+                ) : (
+                  <Play size={32} color="#fff" style={{ marginLeft: 4 }} />
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
 
           <TouchableOpacity
-            style={[styles.controlButton, styles.settingsButton]}
+            style={[
+              styles.controlButton,
+              {
+                backgroundColor: theme.cardBg,
+                borderColor: isRunning ? 'rgba(107,114,128,0.3)' : '#8b5cf6',
+              }
+            ]}
             onPress={() => setShowTimePicker(true)}
             disabled={isRunning}
+            activeOpacity={0.7}
           >
-            <Settings size={24} color={isRunning ? '#6b7280' : '#8b5cf6'} />
+            <LinearGradient
+              colors={isRunning
+                ? ['rgba(107,114,128,0.1)', 'rgba(107,114,128,0.05)']
+                : ['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.1)']}
+              style={styles.buttonGradient}
+            >
+              <Settings size={24} color={isRunning ? '#6b7280' : '#8b5cf6'} />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        {/* Temps prédéfinis */}
+        {/* Presets - Neumorphic Pills */}
         {!isRunning && (
-          <View style={styles.presetsContainer}>
-            <Text style={styles.presetsTitle}>Durées rapides</Text>
+          <View style={[styles.presetsContainer, { backgroundColor: theme.cardBg }]}>
+            <Text style={[styles.presetsTitle, { color: theme.text }]}>Durées rapides</Text>
             <View style={styles.presetsGrid}>
               {presetTimes.map((preset, index) => (
                 <TouchableOpacity
                   key={index}
-                  style={[
-                    styles.presetButton,
-                    initialTime === preset.seconds && styles.presetButtonActive
-                  ]}
                   onPress={() => handlePresetTime(preset.seconds)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={[
-                    styles.presetButtonText,
-                    initialTime === preset.seconds && styles.presetButtonTextActive
-                  ]}>
-                    {preset.label}
-                  </Text>
+                  <LinearGradient
+                    colors={initialTime === preset.seconds
+                      ? ['#8b5cf6', '#7c3aed']
+                      : darkMode
+                        ? ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)']
+                        : ['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.02)']}
+                    style={[
+                      styles.presetButton,
+                      initialTime === preset.seconds && styles.presetButtonActive
+                    ]}
+                  >
+                    <View style={styles.presetGloss} />
+                    <Text style={[
+                      styles.presetButtonText,
+                      { color: initialTime === preset.seconds ? '#fff' : theme.subtext }
+                    ]}>
+                      {preset.label}
+                    </Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               ))}
             </View>
@@ -392,17 +478,19 @@ export default function TimerScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.modalContainer}>
+        <LinearGradient colors={theme.bg as [string, string]} style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowSoundPicker(false)}>
               <Text style={styles.modalCancelButton}>Annuler</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Sons d'alarme</Text>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Sons d'alarme</Text>
             <View style={{ width: 60 }} />
           </View>
 
-          {/* Bouton pour ajouter un son personnalisé */}
-          <TouchableOpacity style={styles.addSoundButton} onPress={handleAddCustomSound}>
+          <TouchableOpacity
+            style={[styles.addSoundButton, { backgroundColor: theme.cardBg }]}
+            onPress={handleAddCustomSound}
+          >
             <Upload size={20} color="#8b5cf6" />
             <Text style={styles.addSoundButtonText}>Ajouter un fichier MP3</Text>
           </TouchableOpacity>
@@ -417,6 +505,7 @@ export default function TimerScreen() {
                 <TouchableOpacity
                   style={[
                     styles.soundOption,
+                    { backgroundColor: theme.cardBg },
                     selectedSound === sound.id && styles.soundOptionSelected
                   ]}
                   onPress={() => {
@@ -427,23 +516,26 @@ export default function TimerScreen() {
                   <View style={styles.soundInfo}>
                     <Text style={[
                       styles.soundName,
+                      { color: theme.text },
                       selectedSound === sound.id && styles.soundNameSelected
                     ]}>
                       {sound.name}
                     </Text>
-                    <Text style={styles.soundDescription}>{sound.description}</Text>
+                    <Text style={[styles.soundDescription, { color: theme.subtext }]}>
+                      {sound.description}
+                    </Text>
                   </View>
-                  
+
                   {selectedSound === sound.id && (
                     <View style={styles.selectedIndicator} />
                   )}
                 </TouchableOpacity>
-                
+
                 <TouchableOpacity
-                  style={styles.playButton}
+                  style={[styles.playButton, { backgroundColor: theme.cardBg }]}
                   onPress={() => previewSound(sound.id)}
                 >
-                  <Volume2 size={20} color="#9ca3af" />
+                  <Volume2 size={20} color={theme.subtext} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -451,7 +543,6 @@ export default function TimerScreen() {
         </LinearGradient>
       </Modal>
 
-      {/* Alerte de fin de minuteur */}
       <CustomAlert
         visible={showCompletionAlert}
         title="Temps écoulé !"
@@ -478,55 +569,90 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 40,
+    marginBottom: 30,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
   },
   headerActions: {
     flexDirection: 'row',
     gap: 12,
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
+
+  // Progress Circle
   circleContainer: {
     alignItems: 'center',
     marginBottom: 40,
   },
-  progressCircle: {
+  progressCircleOuter: {
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  progressBar: {
+  progressRing: {
+    position: 'absolute',
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+  },
+  progressTrack: {
     position: 'absolute',
     width: '100%',
     height: '100%',
-    borderRadius: 140,
+    borderRadius: 130,
     borderWidth: 8,
-    borderColor: '#8b5cf6',
+  },
+  progressFill: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: 130,
+    borderWidth: 8,
     borderRightColor: 'transparent',
     borderBottomColor: 'transparent',
   },
   innerCircle: {
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  glossOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderTopLeftRadius: 110,
+    borderTopRightRadius: 110,
   },
   timeDisplay: {
     alignItems: 'center',
@@ -534,129 +660,119 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 48,
     fontWeight: '300',
-    color: '#fff',
     letterSpacing: -1,
   },
   timeSubtext: {
     fontSize: 14,
-    color: '#9ca3af',
     marginTop: 8,
   },
-  presetsContainer: {
-    paddingHorizontal: 20,
+
+  // Control Buttons
+  controlsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 24,
+    paddingHorizontal: 40,
     marginBottom: 40,
+  },
+  controlButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  buttonGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainButtonContainer: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  mainButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  mainButtonGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '45%',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+
+  // Presets
+  presetsContainer: {
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   presetsTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
     marginBottom: 16,
   },
   presetsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   presetButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'transparent',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   presetButtonActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.3)',
-    borderColor: '#8b5cf6',
+    shadowColor: '#8b5cf6',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  presetGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   presetButtonText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#d1d5db',
-  },
-  presetButtonTextActive: {
-    color: '#8b5cf6',
-  },
-  soundContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 40,
-  },
-  soundTitle: {
-    fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
-    marginBottom: 16,
   },
-  soundSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  soundButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  soundButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  previewButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  controlsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 60,
-    marginBottom: 40,
-  },
-  controlButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  resetButton: {
-    borderWidth: 2,
-    borderColor: '#ef4444',
-  },
-  settingsButton: {
-    borderWidth: 2,
-    borderColor: '#8b5cf6',
-  },
-  mainButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  playButton: {
-    backgroundColor: '#10b981',
-  },
-  pauseButton: {
-    backgroundColor: '#f59e0b',
-  },
-  // Styles pour la modale de sélection de son
+
+  // Modal styles
   modalContainer: {
     flex: 1,
     paddingTop: 60,
@@ -671,7 +787,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
   },
   modalCancelButton: {
     fontSize: 16,
@@ -681,10 +796,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
     borderWidth: 1,
     borderColor: '#8b5cf6',
-    borderRadius: 12,
+    borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 20,
     marginHorizontal: 20,
@@ -703,15 +817,14 @@ const styles = StyleSheet.create({
   soundItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   soundOption: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginRight: 12,
     borderWidth: 1,
@@ -719,7 +832,6 @@ const styles = StyleSheet.create({
   },
   soundOptionSelected: {
     borderColor: '#8b5cf6',
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
   },
   soundInfo: {
     flex: 1,
@@ -727,27 +839,24 @@ const styles = StyleSheet.create({
   soundName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#fff',
   },
   soundNameSelected: {
     color: '#8b5cf6',
   },
   soundDescription: {
     fontSize: 14,
-    color: '#9ca3af',
     marginTop: 2,
   },
   selectedIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: '#8b5cf6',
   },
   playButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -1,5 +1,5 @@
 import { Tabs, usePathname } from 'expo-router';
-import { Clock, AlarmClock as Alarm, Timer, Watch as Stopwatch, Dumbbell } from 'lucide-react-native';
+import { Clock, AlarmClock as Alarm, Timer, Watch as Stopwatch, Dumbbell, Settings } from 'lucide-react-native';
 import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AIBubble } from '@/components/AIBubble';
@@ -86,6 +86,15 @@ export default function TabLayout() {
           title: 'Rounds',
           tabBarIcon: ({ size, color }) => (
             <Dumbbell size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: t('settings'),
+          tabBarIcon: ({ size, color }) => (
+            <Settings size={size} color={color} />
           ),
         }}
       />

@@ -8,6 +8,7 @@ import {
   Modal,
   Switch,
   Alert,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Plus, CreditCard as Edit, Trash2, Bell, Settings2 } from 'lucide-react-native';
@@ -24,7 +25,6 @@ import {
   FlapClock,
   ClockSelector,
   useClockSelection,
-  ClockType,
 } from '@/components/clocks';
 
 interface Alarm {
@@ -51,9 +51,18 @@ export default function AlarmsScreen() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showAlarmAlert, setShowAlarmAlert] = useState(false);
   const [currentAlarmLabel, setCurrentAlarmLabel] = useState('');
+  const [darkMode, setDarkMode] = useState(true);
   const lastTriggerTime = useRef<number>(0);
   const [showClockSelector, setShowClockSelector] = useState(false);
   const { selectedClock, setSelectedClock, loading: clockLoading } = useClockSelection();
+
+  // Theme colors
+  const theme = {
+    bg: darkMode ? ['#1a1a2e', '#16213e'] : ['#e8eef3', '#d4dde6'],
+    cardBg: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.9)',
+    text: darkMode ? '#fff' : '#1a1a2e',
+    subtext: darkMode ? '#9ca3af' : '#6b7280',
+  };
 
   // Render the selected clock component
   const renderSelectedClock = () => {
@@ -70,24 +79,34 @@ export default function AlarmsScreen() {
         return <GoldenClock />;
       case 'digital':
       default:
-        return null; // Will show the default digital time
+        return null;
     }
   };
 
   useEffect(() => {
     loadAlarms();
+    loadDarkMode();
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Écouter les notifications d'alarme
+  const loadDarkMode = async () => {
+    try {
+      const settings = await AsyncStorage.getItem('app_settings');
+      if (settings) {
+        const parsed = JSON.parse(settings);
+        setDarkMode(parsed.darkMode ?? true);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du mode:', error);
+    }
+  };
+
   useEffect(() => {
     const subscription = Notifications.addNotificationReceivedListener(async notification => {
       if (notification.request.content.categoryIdentifier === 'alarm') {
-        // Éviter les déclenchements multiples rapides (debounce de 2 secondes)
         const now = Date.now();
         if (now - lastTriggerTime.current < 2000) {
-          console.log('Alarme ignorée - trop rapide après la dernière');
           return;
         }
         lastTriggerTime.current = now;
@@ -95,10 +114,8 @@ export default function AlarmsScreen() {
         const label = notification.request.content.body || 'Alarme';
         const data = notification.request.content.data || {};
 
-        // Déclencher l'alarme avec toutes les fonctionnalités
         await triggerAlarm(data);
 
-        // Afficher la modale
         setCurrentAlarmLabel(label);
         setShowAlarmAlert(true);
       }
@@ -128,7 +145,6 @@ export default function AlarmsScreen() {
   };
 
   const addAlarm = (alarmData: Omit<Alarm, 'id'>) => {
-    console.log('Adding alarm:', alarmData);
     const newAlarm: Alarm = {
       ...alarmData,
       id: Date.now().toString(),
@@ -141,16 +157,13 @@ export default function AlarmsScreen() {
       scheduleAlarmNotification(newAlarm);
     }
 
-    // Fermer la modale et réinitialiser l'état
     setShowModal(false);
     setEditingAlarm(null);
-    console.log('Modal should be closed now');
   };
 
   const updateAlarm = (alarmData: Omit<Alarm, 'id'>) => {
     if (!editingAlarm) return;
 
-    console.log('Updating alarm:', alarmData);
     const updatedAlarm: Alarm = {
       ...alarmData,
       id: editingAlarm.id,
@@ -167,10 +180,8 @@ export default function AlarmsScreen() {
       cancelNotification(updatedAlarm.id);
     }
 
-    // Fermer la modale et réinitialiser l'état
     setShowModal(false);
     setEditingAlarm(null);
-    console.log('Modal should be closed after update');
   };
 
   const toggleAlarm = (alarmId: string) => {
@@ -234,74 +245,108 @@ export default function AlarmsScreen() {
   };
 
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e']} style={styles.container}>
+    <LinearGradient colors={theme.bg as [string, string]} style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header avec bouton de sélection d'horloge */}
+        {/* Header - Neumorphic */}
         <View style={styles.headerRow}>
-          <View style={{ width: 36 }} />
-          <Text style={styles.pageTitle}>Accueil</Text>
+          <View style={{ width: 44 }} />
+          <Text style={[styles.pageTitle, { color: theme.text }]}>Accueil</Text>
           <TouchableOpacity
-            style={styles.clockSelectorButton}
+            style={[styles.clockSelectorButton, { backgroundColor: theme.cardBg }]}
             onPress={() => setShowClockSelector(true)}
           >
-            <Settings2 size={20} color="#fff" />
+            <LinearGradient
+              colors={['rgba(139,92,246,0.3)', 'rgba(139,92,246,0.1)']}
+              style={styles.selectorButtonGradient}
+            >
+              <Settings2 size={20} color="#8b5cf6" />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        {/* Affichage de l'horloge sélectionnée ou heure digitale par défaut */}
+        {/* Clock Display - Neumorphic Card */}
         {selectedClock !== 'digital' ? (
-          <View style={styles.selectedClockContainer}>
+          <View style={[styles.clockCard, { backgroundColor: theme.cardBg }]}>
+            <View style={styles.clockGloss} />
             {renderSelectedClock()}
           </View>
         ) : (
-          <View style={styles.header}>
-            <Text style={styles.currentTime}>{formatTime(currentTime)}</Text>
-            <Text style={styles.currentDate}>{formatDate(currentTime)}</Text>
+          <View style={[styles.digitalClockCard, { backgroundColor: theme.cardBg }]}>
+            <View style={styles.clockGloss} />
+            <Text style={[styles.currentTime, { color: theme.text }]}>
+              {formatTime(currentTime)}
+            </Text>
+            <Text style={[styles.currentDate, { color: theme.subtext }]}>
+              {formatDate(currentTime)}
+            </Text>
           </View>
         )}
 
         {/* Widget Météo */}
         <WeatherWidget />
 
-        {/* Section Alarmes */}
+        {/* Section Alarmes - Neumorphic */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Mes Alarmes</Text>
+            <Text style={[styles.sectionTitle, { color: theme.text }]}>Mes Alarmes</Text>
             <TouchableOpacity
-              style={styles.addButton}
+              style={styles.addButtonContainer}
               onPress={() => setShowModal(true)}
+              activeOpacity={0.8}
             >
-              <Plus size={20} color="#fff" />
+              <LinearGradient
+                colors={['#8b5cf6', '#7c3aed']}
+                style={styles.addButton}
+              >
+                <View style={styles.addButtonGloss} />
+                <Plus size={20} color="#fff" />
+              </LinearGradient>
             </TouchableOpacity>
           </View>
 
           {alarms.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Bell size={60} color="#4b5563" />
-              <Text style={styles.emptyText}>Aucune alarme configurée</Text>
-              <Text style={styles.emptySubtext}>
+            <View style={[styles.emptyState, { backgroundColor: theme.cardBg }]}>
+              <Bell size={50} color={theme.subtext} />
+              <Text style={[styles.emptyText, { color: theme.subtext }]}>
+                Aucune alarme configurée
+              </Text>
+              <Text style={[styles.emptySubtext, { color: theme.subtext }]}>
                 Appuyez sur + pour ajouter votre première alarme
               </Text>
             </View>
           ) : (
             alarms.map(alarm => (
-              <View key={alarm.id} style={styles.alarmItem}>
+              <View key={alarm.id} style={[styles.alarmItem, { backgroundColor: theme.cardBg }]}>
+                <View style={styles.alarmGloss} />
                 <View style={styles.alarmContent}>
-                  <Text style={styles.alarmTime}>{alarm.time}</Text>
-                  <Text style={styles.alarmLabel}>{alarm.label}</Text>
-                  <Text style={styles.alarmDays}>
-                    {alarm.days.length === 7 ? 'Tous les jours' : alarm.days.join(', ')}
-                  </Text>
+                  <Text style={[styles.alarmTime, { color: theme.text }]}>{alarm.time}</Text>
+                  <Text style={[styles.alarmLabel, { color: theme.subtext }]}>{alarm.label}</Text>
+                  <View style={styles.alarmDaysContainer}>
+                    {alarm.days.length === 7 ? (
+                      <View style={styles.dayBadge}>
+                        <Text style={styles.dayBadgeText}>Tous les jours</Text>
+                      </View>
+                    ) : (
+                      alarm.days.slice(0, 3).map((day, idx) => (
+                        <View key={idx} style={styles.dayBadge}>
+                          <Text style={styles.dayBadgeText}>{day}</Text>
+                        </View>
+                      ))
+                    )}
+                    {alarm.days.length > 3 && alarm.days.length < 7 && (
+                      <Text style={[styles.moreText, { color: theme.subtext }]}>+{alarm.days.length - 3}</Text>
+                    )}
+                  </View>
                 </View>
                 <View style={styles.alarmActions}>
                   <Switch
                     value={alarm.enabled}
                     onValueChange={() => toggleAlarm(alarm.id)}
-                    trackColor={{ false: '#374151', true: '#8b5cf6' }}
-                    thumbColor={alarm.enabled ? '#a78bfa' : '#9ca3af'}
+                    trackColor={{ false: darkMode ? '#374151' : '#d1d5db', true: '#8b5cf6' }}
+                    thumbColor={alarm.enabled ? '#fff' : '#9ca3af'}
                   />
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={[styles.actionButton, { backgroundColor: 'rgba(139,92,246,0.15)' }]}
                     onPress={() => {
                       setEditingAlarm(alarm);
                       setShowModal(true);
@@ -310,7 +355,7 @@ export default function AlarmsScreen() {
                     <Edit size={16} color="#8b5cf6" />
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.actionButton}
+                    style={[styles.actionButton, { backgroundColor: 'rgba(239,68,68,0.15)' }]}
                     onPress={() => deleteAlarm(alarm.id)}
                   >
                     <Trash2 size={16} color="#ef4444" />
@@ -328,7 +373,6 @@ export default function AlarmsScreen() {
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => {
-          console.log('Modal onRequestClose called');
           setShowModal(false);
           setEditingAlarm(null);
         }}
@@ -343,7 +387,6 @@ export default function AlarmsScreen() {
             }
           }}
           onCancel={() => {
-            console.log('AlarmPicker onCancel called');
             setShowModal(false);
             setEditingAlarm(null);
           }}
@@ -388,44 +431,73 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#fff',
   },
   clockSelectorButton: {
-    backgroundColor: 'rgba(139, 92, 246, 0.3)',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  selectorButtonGradient: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#8b5cf6',
   },
-  selectedClockContainer: {
-    marginHorizontal: 10,
+
+  // Clock Cards - Neumorphic
+  clockCard: {
+    marginHorizontal: 20,
     marginBottom: 20,
-    borderRadius: 20,
+    borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  header: {
-    alignItems: 'center',
+  digitalClockCard: {
+    marginHorizontal: 20,
     marginBottom: 20,
-    marginTop: 10,
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  clockGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '40%',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   currentTime: {
-    fontSize: 48,
+    fontSize: 56,
     fontWeight: '200',
-    color: '#fff',
-    letterSpacing: -2,
+    letterSpacing: -3,
   },
   currentDate: {
     fontSize: 16,
-    color: '#9ca3af',
     marginTop: 8,
     textTransform: 'capitalize',
   },
+
+  // Section
   section: {
     paddingHorizontal: 20,
     marginBottom: 20,
@@ -438,65 +510,123 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 22,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: '700',
+  },
+  addButtonContainer: {
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   addButton: {
-    backgroundColor: '#8b5cf6',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
+  addButtonGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+  },
+
+  // Empty State
   emptyState: {
     alignItems: 'center',
     paddingVertical: 40,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
   },
   emptyText: {
     fontSize: 18,
-    color: '#9ca3af',
     marginTop: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#6b7280',
     marginTop: 8,
     textAlign: 'center',
+    paddingHorizontal: 20,
   },
+
+  // Alarm Items - Neumorphic
   alarmItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  alarmGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   alarmContent: {
     flex: 1,
   },
   alarmTime: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '600',
-    color: '#fff',
   },
   alarmLabel: {
-    fontSize: 16,
-    color: '#d1d5db',
+    fontSize: 15,
     marginTop: 2,
   },
-  alarmDays: {
+  alarmDaysContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  dayBadge: {
+    backgroundColor: 'rgba(139,92,246,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  dayBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8b5cf6',
+  },
+  moreText: {
     fontSize: 12,
-    color: '#9ca3af',
-    marginTop: 4,
+    marginLeft: 4,
   },
   alarmActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   actionButton: {
-    padding: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
